@@ -1,21 +1,36 @@
 <template>
-  <div class="search-bar">
-    <select v-model="engineId" class="engine-select" :title="'搜索引擎'">
-      <option v-for="e in engines" :key="e.id" :value="e.id">{{ e.name }}</option>
-    </select>
-    <input
-      v-model="keyword"
-      type="text"
-      :placeholder="`在 ${currentEngine?.name || ''} 中搜索...`"
-      @keyup.enter="onSearch"
-      autofocus
-    />
-    <button class="search-btn" @click="onSearch">搜索</button>
+  <div class="search-wrap">
+    <div class="engine-tabs">
+      <button
+        v-for="e in engines"
+        :key="e.id"
+        class="engine-tab"
+        :class="{ active: e.id === engineId }"
+        @click="onPickEngine(e.id)"
+        type="button"
+      >
+        {{ e.name }}
+      </button>
+    </div>
+    <div class="search-box glass-strong">
+      <input
+        v-model="keyword"
+        type="text"
+        :placeholder="`在 ${currentEngine?.name || '搜索引擎'} 中搜索...`"
+        @keyup.enter="onSearch"
+        ref="inputRef"
+        autofocus
+      />
+      <button class="search-btn" type="button" @click="onSearch" :title="`使用${currentEngine?.name || ''}搜索`">
+        <SearchIcon />
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { SearchIcon } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
 
@@ -34,8 +49,18 @@ watch(
 )
 
 const currentEngine = computed(() => engines.value.find((e) => e.id === engineId.value))
-
 const keyword = ref('')
+const inputRef = ref<HTMLInputElement | null>(null)
+
+function onPickEngine(id: string) {
+  engineId.value = id
+  // 切换引擎后聚焦输入框
+  nextTick(() => inputRef.value?.focus())
+  // 记忆选择
+  if (id !== state.config?.defaultEngine) {
+    saveConfig({ defaultEngine: id } as any).catch(() => {})
+  }
+}
 
 async function onSearch() {
   const kw = keyword.value.trim()
@@ -48,54 +73,122 @@ async function onSearch() {
   } else {
     window.location.href = url
   }
-  // 切换引擎时记住选择
-  if (engineId.value !== state.config?.defaultEngine) {
-    await saveConfig({ defaultEngine: engineId.value } as any)
-  }
 }
+
+onMounted(() => {
+  // 自动聚焦搜索框
+  nextTick(() => inputRef.value?.focus())
+})
 </script>
 
 <style scoped>
-.search-bar {
-  flex: 1;
-  min-width: 280px;
-  max-width: 600px;
+.search-wrap {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
 }
 
-.engine-select {
-  width: 90px;
-  padding: 10px;
-  border-radius: var(--radius-sm);
+.engine-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.engine-tab {
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: var(--transition);
   cursor: pointer;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-input {
+.engine-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.engine-tab.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  border-radius: 999px;
+  padding: 6px 6px 6px 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.search-box input {
   flex: 1;
   min-width: 0;
-  padding: 10px 14px;
+  padding: 14px 8px;
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+}
+
+.search-box input::placeholder {
+  color: var(--text-muted);
 }
 
 .search-btn {
-  padding: 10px 20px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  border-radius: var(--radius-sm);
-  font-weight: 500;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: var(--transition);
 }
 
 .search-btn:hover {
   background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.search-btn svg {
+  width: 22px;
+  height: 22px;
 }
 
 @media (max-width: 640px) {
-  .search-bar {
-    order: 3;
-    width: 100%;
-    max-width: none;
+  .search-box {
+    max-width: 100%;
+    padding: 4px 4px 4px 18px;
+  }
+  .search-box input {
+    padding: 10px 6px;
+    font-size: 15px;
+  }
+  .search-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .search-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .engine-tab {
+    padding: 5px 12px;
+    font-size: 12px;
   }
 }
 </style>

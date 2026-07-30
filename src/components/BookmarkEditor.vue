@@ -23,6 +23,11 @@
           <span>图标 URL</span>
           <input v-model="form.icon" type="text" placeholder="留空使用自动 favicon" />
         </label>
+        <label class="form-row checkbox-row">
+          <span>设为常用</span>
+          <input v-model="form.favorite" type="checkbox" class="checkbox" />
+          <small class="hint-text">常用书签会显示在分组顶部</small>
+        </label>
 
         <div class="preview">
           <div class="preview-label">预览:</div>
@@ -73,7 +78,8 @@ const form = reactive({
   name: props.bookmark?.name || '',
   url: props.bookmark?.url || '',
   desc: props.bookmark?.desc || '',
-  icon: props.bookmark?.icon || ''
+  icon: props.bookmark?.icon || '',
+  favorite: !!props.bookmark?.favorite
 })
 
 const saving = ref(false)
@@ -111,7 +117,8 @@ async function onSave() {
         name: form.name.trim(),
         url: form.url.trim(),
         desc: form.desc.trim(),
-        icon: form.icon.trim()
+        icon: form.icon.trim(),
+        favorite: !!form.favorite
       })
       await saveBookmarks(props.groupId, g.bookmarks)
     } else {
@@ -120,7 +127,8 @@ async function onSave() {
         name: form.name.trim(),
         url: form.url.trim(),
         desc: form.desc.trim(),
-        icon: form.icon.trim()
+        icon: form.icon.trim(),
+        favorite: !!form.favorite
       })
     }
     ;(window as any).$toast?.(props.bookmark ? '已更新' : '已添加', 'success')
@@ -188,6 +196,24 @@ async function onSave() {
 .form-row input {
   width: 100%;
   padding: 10px 12px;
+}
+
+.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-row .checkbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.checkbox-row .hint-text {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex: 1;
 }
 
 .preview {

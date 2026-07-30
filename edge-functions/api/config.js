@@ -10,6 +10,8 @@ import {
 const DEFAULT_CONFIG = {
   title: '我的导航',
   background: { type: 'color', value: '#1f2937' },
+  backgroundBlur: 0, // 背景图模糊值(px)
+  backgroundMask: 0.35, // 背景遮罩透明度(0-1)
   theme: 'dark', // dark | light | auto
   defaultEngine: 'baidu',
   engines: [

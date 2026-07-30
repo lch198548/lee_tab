@@ -38,7 +38,8 @@ export async function onRequestPost({ request, env, params }) {
     desc: body?.desc || '',
     sort: bookmarks.length,
     clicks: 0,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    favorite: !!body?.favorite
   })
 
   await kvPutJSON(kv, `group_${id}`, { ...group, bookmarks })
@@ -78,7 +79,8 @@ export async function onRequestPut({ request, env, params }) {
     desc: b.desc || '',
     sort: i,
     clicks: Number(b.clicks) || 0,
-    createdAt: b.createdAt || Date.now()
+    createdAt: b.createdAt || Date.now(),
+    favorite: !!b.favorite
   }))
 
   await kvPutJSON(kv, `group_${id}`, { ...group, bookmarks: cleaned })

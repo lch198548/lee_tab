@@ -1,27 +1,33 @@
 <template>
-  <a
-    :href="bookmark.url"
-    class="bookmark-card"
-    :target="openInNewTab ? '_blank' : '_self'"
-    rel="noopener noreferrer"
-    @click="onClick"
-  >
-    <div class="icon-wrap">
-      <img
-        v-if="iconSrc && !loadFailed"
-        :src="iconSrc"
-        :alt="bookmark.name"
-        class="favicon"
-        referrerpolicy="no-referrer"
-        @error="onIconError"
-      />
-      <div v-else class="fallback-icon">{{ firstChar }}</div>
-    </div>
-    <div class="info">
-      <div class="name">{{ bookmark.name }}</div>
-      <div v-if="bookmark.desc" class="desc">{{ bookmark.desc }}</div>
-    </div>
-    <div class="card-actions" @click.prevent.stop>
+  <div class="bookmark-card" :class="{ favorite: bookmark.favorite }">
+    <a
+      :href="bookmark.url"
+      class="card-link"
+      :target="openInNewTab ? '_blank' : '_self'"
+      rel="noopener noreferrer"
+      @click="onClick"
+    >
+      <div class="icon-wrap">
+        <img
+          v-if="iconSrc && !loadFailed"
+          :src="iconSrc"
+          :alt="bookmark.name"
+          class="favicon"
+          referrerpolicy="no-referrer"
+          @error="onIconError"
+        />
+        <div v-else class="fallback-icon">{{ firstChar }}</div>
+        <span v-if="bookmark.favorite" class="star-badge" title="常用">
+          <StarFilledIcon />
+        </span>
+      </div>
+      <div class="name" :title="bookmark.name">{{ bookmark.name }}</div>
+    </a>
+    <div class="card-actions">
+      <button class="mini-btn" :title="bookmark.favorite ? '取消常用' : '设为常用'" @click.stop="onToggleFav">
+        <StarFilledIcon v-if="bookmark.favorite" />
+        <StarIcon v-else />
+      </button>
       <button class="mini-btn" title="编辑" @click.stop="onEdit">
         <EditIcon />
       </button>
@@ -29,13 +35,13 @@
         <TrashIcon />
       </button>
     </div>
-  </a>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { Bookmark } from '@/api'
-import { EditIcon, TrashIcon } from './icons'
+import { EditIcon, TrashIcon, StarIcon, StarFilledIcon } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useGroups } from '@/composables/useGroups'
 import { faviconUrl, nextFavicon } from '@/utils/favicon'
@@ -50,7 +56,6 @@ const firstChar = computed(() => props.bookmark.name?.[0]?.toUpperCase() || '?')
 const iconSrc = ref(faviconUrl(props.bookmark.url))
 const loadFailed = ref(false)
 
-// URL 变化时重置图标
 watch(
   () => props.bookmark.url,
   () => {
@@ -71,12 +76,25 @@ function onIconError() {
 function onClick() {
   // 异步累计点击数(不影响跳转)
   props.bookmark.clicks = (props.bookmark.clicks || 0) + 1
-  // 不阻塞跳转,后台保存
   saveBookmarks(props.groupId, state.groups.find((g) => g.id === props.groupId)?.bookmarks || []).catch(() => {})
 }
 
 function onEdit() {
   ;(window as any).$openBookmarkEditor?.(props.groupId, props.bookmark)
+}
+
+async function onToggleFav() {
+  const g = state.groups.find((x) => x.id === props.groupId)
+  if (!g) return
+  const b = g.bookmarks.find((x) => x.id === props.bookmark.id)
+  if (!b) return
+  b.favorite = !b.favorite
+  try {
+    await saveBookmarks(props.groupId, g.bookmarks)
+    ;(window as any).$toast?.(b.favorite ? '已设为常用' : '已取消常用', 'success')
+  } catch (e) {
+    ;(window as any).$toast?.((e as Error).message, 'error')
+  }
 }
 
 async function onDelete() {
@@ -95,80 +113,120 @@ async function onDelete() {
 
 <style scoped>
 .bookmark-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-  color: inherit;
-  border: 1px solid transparent;
-  transition: var(--transition);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  border-radius: var(--radius);
+  transition: var(--transition);
 }
 
-.bookmark-card:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--border-color);
+.card-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px 10px;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius);
+  transition: var(--transition);
+}
+
+.bookmark-card:hover .card-link {
+  background: var(--bg-card);
+  transform: translateY(-2px);
 }
 
 .icon-wrap {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  position: relative;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 12px;
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.bookmark-card:hover .icon-wrap {
+  border-color: var(--accent);
+  box-shadow: 0 6px 20px rgba(96, 165, 250, 0.25);
 }
 
 .favicon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  /* 正方形图标,不裁剪,object-fit 保持比例 */
+  border-radius: 6px;
   object-fit: contain;
+  padding: 2px;
 }
 
 .fallback-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--accent);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--bg-glass-strong);
+}
+
+.star-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warning);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.info {
-  flex: 1;
-  min-width: 0;
+.star-badge svg {
+  width: 11px;
+  height: 11px;
+  fill: #fff;
+  stroke: #fff;
 }
 
 .name {
   font-size: 13px;
-  font-weight: 500;
+  color: var(--text-primary);
+  text-align: center;
+  width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .card-actions {
   display: flex;
   gap: 2px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
   opacity: 0;
   transition: var(--transition);
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(10px);
+  border-radius: 6px;
+  padding: 2px;
 }
 
 .bookmark-card:hover .card-actions {
@@ -176,8 +234,8 @@ async function onDelete() {
 }
 
 .mini-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,11 +244,33 @@ async function onDelete() {
 }
 
 .mini-btn:hover {
-  background: var(--bg-card);
+  background: var(--bg-card-hover);
   color: var(--text-primary);
 }
 
 .mini-btn.danger:hover {
   color: var(--danger);
+}
+
+.mini-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+@media (max-width: 640px) {
+  .icon-wrap {
+    width: 42px;
+    height: 42px;
+  }
+  .favicon {
+    width: 28px;
+    height: 28px;
+  }
+  .fallback-icon {
+    font-size: 16px;
+  }
+  .name {
+    font-size: 12px;
+  }
 }
 </style>

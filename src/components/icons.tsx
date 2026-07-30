@@ -41,3 +41,14 @@ export const DownloadIcon = make(
 export const UploadIcon = make(
   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
 )
+export const SearchIcon = make(
+  '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+)
+export const StarIcon = make(
+  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'
+)
+export const StarFilledIcon = make(
+  '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>'
+)
+export const ChevronLeftIcon = make('<polyline points="15 18 9 12 15 6"/>')
+export const ChevronRightIcon = make('<polyline points="9 18 15 12 9 6"/>')

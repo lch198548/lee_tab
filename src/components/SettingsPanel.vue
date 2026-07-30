@@ -50,6 +50,32 @@
               :placeholder="form.background.type === 'image' ? 'https://...' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'">
             </textarea>
           </label>
+
+          <!-- 背景图专属:模糊值 + 遮罩透明度 -->
+          <template v-if="form.background.type === 'image'">
+            <label class="form-row">
+              <span>背景模糊 ({{ form.backgroundBlur || 0 }}px)</span>
+              <input
+                v-model.number="form.backgroundBlur"
+                type="range"
+                min="0"
+                max="30"
+                step="1"
+                class="range"
+              />
+            </label>
+            <label class="form-row">
+              <span>遮罩透明度 ({{ Math.round((form.backgroundMask ?? 0) * 100) }}%)</span>
+              <input
+                v-model.number="form.backgroundMask"
+                type="range"
+                min="0"
+                max="0.9"
+                step="0.05"
+                class="range"
+              />
+            </label>
+          </template>
         </section>
 
         <!-- 搜索引擎 -->
@@ -101,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { api, type AppConfig } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
@@ -120,11 +146,31 @@ const { saveConfig, loadConfig } = useConfig()
 const form = reactive<AppConfig>(JSON.parse(JSON.stringify(state.config || {
   title: '我的导航',
   background: { type: 'color', value: '#1f2937' },
+  backgroundBlur: 0,
+  backgroundMask: 0.35,
   theme: 'dark',
   defaultEngine: 'baidu',
   engines: [],
   openInNewTab: true
 })))
+
+// 兼容老数据:补齐新字段
+if (typeof form.backgroundBlur !== 'number') form.backgroundBlur = 0
+if (typeof form.backgroundMask !== 'number') form.backgroundMask = 0.35
+
+// 切换背景类型时重置 value,避免旧类型的值残留
+watch(
+  () => form.background.type,
+  (newType, oldType) => {
+    if (newType !== oldType) {
+      if (newType === 'color') {
+        form.background.value = '#1f2937'
+      } else {
+        form.background.value = ''
+      }
+    }
+  }
+)
 
 const themes = [
   { value: 'dark' as const, label: '深色' },
@@ -269,6 +315,39 @@ async function onImportFile(e: Event) {
   height: 32px;
   padding: 2px;
   cursor: pointer;
+}
+
+.range {
+  flex: 1;
+  height: 6px;
+  padding: 0;
+  background: var(--bg-input);
+  border-radius: 999px;
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid #fff;
 }
 
 .checkbox {
