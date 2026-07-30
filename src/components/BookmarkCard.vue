@@ -17,9 +17,6 @@
           @error="onIconError"
         />
         <div v-else class="fallback-icon">{{ firstChar }}</div>
-        <span v-if="bookmark.favorite" class="star-badge" title="常用">
-          <StarFilledIcon />
-        </span>
       </div>
       <div class="name" :title="bookmark.name">{{ bookmark.name }}</div>
     </a>
@@ -53,18 +50,25 @@ const { saveBookmarks } = useGroups()
 const openInNewTab = computed(() => state.config?.openInNewTab ?? true)
 const firstChar = computed(() => props.bookmark.name?.[0]?.toUpperCase() || '?')
 
-const iconSrc = ref(faviconUrl(props.bookmark.url))
+// 优先使用自定义图标,否则走 favicon 服务
+const iconSrc = ref(props.bookmark.icon || faviconUrl(props.bookmark.url))
 const loadFailed = ref(false)
+const hasCustomIcon = computed(() => !!props.bookmark.icon)
 
 watch(
-  () => props.bookmark.url,
+  () => [props.bookmark.url, props.bookmark.icon],
   () => {
-    iconSrc.value = faviconUrl(props.bookmark.url)
+    iconSrc.value = props.bookmark.icon || faviconUrl(props.bookmark.url)
     loadFailed.value = false
   }
 )
 
 function onIconError() {
+  // 自定义图标失败则不再降级(用户明确指定了)
+  if (hasCustomIcon.value) {
+    loadFailed.value = true
+    return
+  }
   const next = nextFavicon(props.bookmark.url, iconSrc.value)
   if (next) {
     iconSrc.value = next
@@ -126,8 +130,8 @@ async function onDelete() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 14px 8px 10px;
+  gap: 6px;
+  padding: 8px 6px 6px;
   width: 100%;
   text-decoration: none;
   color: inherit;
@@ -142,12 +146,12 @@ async function onDelete() {
 
 .icon-wrap {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--bg-glass-strong);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -162,9 +166,9 @@ async function onDelete() {
 }
 
 .favicon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   object-fit: contain;
   padding: 2px;
 }
@@ -175,32 +179,10 @@ async function onDelete() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--accent);
   background: var(--bg-glass-strong);
-}
-
-.star-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--warning);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.star-badge svg {
-  width: 11px;
-  height: 11px;
-  fill: #fff;
-  stroke: #fff;
 }
 
 .name {
@@ -259,18 +241,18 @@ async function onDelete() {
 
 @media (max-width: 640px) {
   .icon-wrap {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
   }
   .favicon {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
   .fallback-icon {
     font-size: 18px;
   }
   .name {
-    font-size: 13px;
+    font-size: 12px;
   }
 }
 </style>
