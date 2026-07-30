@@ -13,6 +13,7 @@ export function useGroups() {
   async function createGroup(name: string) {
     const res = await api.createGroup(name)
     state.groups.push(res.group)
+    return res
   }
 
   async function renameGroup(id: string, name: string) {
@@ -35,6 +36,18 @@ export function useGroups() {
     }
   }
 
+  async function saveGroupSort(sorts: { id: string; sort: number }[]) {
+    if (sorts.length === 0) return
+    // 本地立即更新 sort 值
+    for (const s of sorts) {
+      const g = state.groups.find((x) => x.id === s.id)
+      if (g) g.sort = s.sort
+    }
+    // 按新 sort 排序
+    state.groups = [...state.groups].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    await api.updateGroup(sorts[0].id, { allSorts: sorts })
+  }
+
   async function addBookmark(groupId: string, bookmark: Partial<Bookmark>) {
     const res = await api.addBookmark(groupId, bookmark)
     const g = state.groups.find((x) => x.id === groupId)
@@ -53,6 +66,7 @@ export function useGroups() {
     renameGroup,
     deleteGroup,
     reorderGroups,
+    saveGroupSort,
     addBookmark,
     saveBookmarks
   }

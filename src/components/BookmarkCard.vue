@@ -142,12 +142,12 @@ async function onDelete() {
 
 .icon-wrap {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 72px;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--bg-glass-strong);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -162,10 +162,9 @@ async function onDelete() {
 }
 
 .favicon {
-  width: 32px;
-  height: 32px;
-  /* 正方形图标,不裁剪,object-fit 保持比例 */
-  border-radius: 6px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   object-fit: contain;
   padding: 2px;
 }
@@ -176,7 +175,7 @@ async function onDelete() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 26px;
   font-weight: 600;
   color: var(--accent);
   background: var(--bg-glass-strong);
@@ -205,7 +204,7 @@ async function onDelete() {
 }
 
 .name {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-primary);
   text-align: center;
   width: 100%;
@@ -213,6 +212,7 @@ async function onDelete() {
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  font-weight: 500;
 }
 
 .card-actions {
@@ -259,18 +259,18 @@ async function onDelete() {
 
 @media (max-width: 640px) {
   .icon-wrap {
-    width: 42px;
-    height: 42px;
+    width: 52px;
+    height: 52px;
   }
   .favicon {
-    width: 28px;
-    height: 28px;
+    width: 34px;
+    height: 34px;
   }
   .fallback-icon {
-    font-size: 16px;
+    font-size: 18px;
   }
   .name {
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 </style>

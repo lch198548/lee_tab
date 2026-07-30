@@ -100,7 +100,12 @@ defineEmits<{
   overflow-y: auto;
   max-height: 50vh;
   padding: 4px 0;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dots::-webkit-scrollbar {
+  display: none;
 }
 
 .dot {
