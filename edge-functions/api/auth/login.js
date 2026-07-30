@@ -14,7 +14,7 @@ const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60 // 7 天
 export async function onRequestPost({ request, env }) {
   const kv = getKV(env)
   if (!kv) {
-    return errorResponse('KV 未绑定,请在 Makers 控制台绑定命名空间(变量名 NAV_KV)', 500)
+    return errorResponse('Blob 存储未就绪,请检查 @edgeone/pages-blob 依赖是否安装', 500)
   }
 
   const requestUrl = new URL(request.url)

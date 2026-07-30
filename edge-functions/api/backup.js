@@ -10,7 +10,7 @@ import {
 // GET /api/backup -> 导出全部数据为 JSON
 export async function onRequestGet({ env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
 
   const config = await kvGetJSON(kv, 'config', null)
   const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
@@ -46,7 +46,7 @@ export async function onRequestGet({ env }) {
 // POST /api/backup -> 导入 JSON 覆盖现有数据
 export async function onRequestPost({ request, env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
 
   let body
   try {

@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@edgeone/pages-blob": "^0.0.14",
     "vue": "^3.4.21",
     "vuedraggable": "^4.1.0"
   },

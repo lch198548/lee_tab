@@ -4,7 +4,8 @@ export async function onRequestGet({ env }) {
   const kv = getKV(env)
   return jsonResponse({
     ok: true,
-    kvBound: !!kv,
+    storageReady: !!kv,
+    storageType: 'blob',
     time: Date.now()
   })
 }

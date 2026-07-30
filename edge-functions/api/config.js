@@ -25,7 +25,7 @@ const DEFAULT_CONFIG = {
 
 export async function onRequestGet({ env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const config = await kvGetJSON(kv, 'config', null)
   if (!config) {
     // 首次访问,写入默认配置
@@ -38,7 +38,7 @@ export async function onRequestGet({ env }) {
 
 export async function onRequestPut({ request, env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   let body
   try {
     body = await parseJSONBody(request)

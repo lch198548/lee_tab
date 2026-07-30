@@ -10,7 +10,7 @@ import {
 // 更新分组(重命名 / 排序)
 export async function onRequestPut({ request, env, params }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const { id } = params
   if (!id) return errorResponse('缺少分组 id', 400)
 
@@ -56,7 +56,7 @@ export async function onRequestPut({ request, env, params }) {
 // 删除分组(含书签)
 export async function onRequestDelete({ env, params }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const { id } = params
   if (!id) return errorResponse('缺少分组 id', 400)
 

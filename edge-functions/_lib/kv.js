@@ -1,41 +1,65 @@
-// Edge Functions 共享工具库
+// Edge Functions 共享工具库(基于 EdgeOne Makers Blob 存储)
 // 注意:V8 运行时,不可使用 Node 内置模块(fs/path/Buffer/process)
-// 仅可使用 Web 标准 API
+// 仅可使用 Web 标准 API + @edgeone/pages-blob SDK
+//
+// 与 KV 版本的区别:
+// 1. Blob 不需要在控制台绑定命名空间,首次 getStore() 时自动创建
+// 2. Blob 支持强一致模式(consistency: "strong"),登录 token 立即生效
+// 3. Key 可包含任意字符(包括 /),但本项目仍保留纯字母+下划线格式以兼容旧数据
 
-// KV 命名空间变量名(在 Makers 控制台绑定命名空间时,变量名必须与此一致)
-// 本地通过 edgeone makers dev 调试时,在 .env 中配置同名变量
-const KV_NAME = 'NAV_KV'
+import { getStore } from '@edgeone/pages-blob'
 
-// 安全获取 KV 绑定(本地开发或未绑定时返回 null,便于排错)
-export function getKV(env) {
-  // 在 EdgeOne Makers 中,KV 通过同名的全局变量暴露
-  // 也可通过 env 访问(取决于绑定方式)
-  const target = (typeof globalThis !== 'undefined' && globalThis[KV_NAME]) || (env && env[KV_NAME])
-  return target || null
+// Blob 命名空间名称(首次调用时自动创建,无需控制台操作)
+const STORE_NAME = 'nav_data'
+
+// 单例 store(强一致模式,确保登录 token / 密码校验立即生效)
+let _store = null
+function getStoreInstance() {
+  if (_store) return _store
+  try {
+    _store = getStore({ name: STORE_NAME, consistency: 'strong' })
+    return _store
+  } catch (e) {
+    console.error('Blob store init failed:', e)
+    return null
+  }
 }
 
-// JSON 读取
-export async function kvGetJSON(kv, key, fallback = null) {
-  if (!kv) return fallback
-  try {
-    const v = await kv.get(key, { type: 'json' })
-    return v === null || v === undefined ? fallback : v
-  } catch (e) {
-    // value 不是合法 JSON 时降级为 text
-    try {
-      const text = await kv.get(key)
-      return text === null || text === undefined ? fallback : JSON.parse(text)
-    } catch (_e) {
-      return fallback
+// 适配原 KV 接口,业务代码无需改动
+export function getKV(_env) {
+  const store = getStoreInstance()
+  if (!store) return null
+  return {
+    // 写入:Blob.set 接收 string/ArrayBuffer/Blob/ReadableStream
+    // 我们统一存 JSON 字符串,与 KV 行为一致
+    async put(key, value) {
+      await store.set(key, typeof value === 'string' ? value : String(value))
+    },
+    // 读取:type 支持 text/json/arrayBuffer/stream,与 KV 兼容(Blob 多一个 blob 类型)
+    async get(key, options = {}) {
+      const type = options.type || (typeof options === 'string' ? options : 'text')
+      return await store.get(key, { type })
+    },
+    async delete(key) {
+      await store.delete(key)
+    },
+    // 列举:适配 KV 的 ListResult 结构 { complete, cursor, keys:[{key}] }
+    async list(options = {}) {
+      const res = await store.list({
+        prefix: options.prefix,
+        cursor: options.cursor,
+        paginate: false // 单页模式,便于适配 KV 接口
+      })
+      return {
+        complete: !res.cursor,
+        cursor: res.cursor || null,
+        keys: (res.blobs || []).map((b) => ({ key: b.key }))
+      }
     }
   }
 }
 
-// JSON 写入
-export async function kvPutJSON(kv, key, value) {
-  if (!kv) throw new Error('KV not bound')
-  await kv.put(key, JSON.stringify(value))
-}
+// === 以下工具函数与原 KV 版本完全一致,业务代码无需改动 ===
 
 // SHA-256 哈希(返回 hex 字符串)
 export async function sha256(text) {
@@ -117,14 +141,15 @@ export async function parseJSONBody(request, maxBytes = 1024 * 1024) {
 }
 
 // 是否已登录(供中间件复用)
+// 注意:使用强一致模式,token 校验立即生效,避免登录后立刻 401
 export async function isAuthenticated(request, env) {
   const kv = getKV(env)
-  if (!kv) return { ok: false, reason: 'KV 未绑定' }
+  if (!kv) return { ok: false, reason: 'Blob 存储未就绪' }
   const cookies = parseCookies(request.headers.get('cookie') || '')
   const token = cookies.nav_token
   if (!token) return { ok: false, reason: '未登录' }
   // token key 仅允许 [a-zA-Z0-9_],已为 hex,合法
-  const record = await kvGetJSON(kv, `token_${token}`, null)
+  const record = await kv.get(`token_${token}`, { type: 'json' })
   if (!record) return { ok: false, reason: 'token 无效' }
   // 校验过期
   const now = Date.now()
@@ -133,4 +158,27 @@ export async function isAuthenticated(request, env) {
     return { ok: false, reason: 'token 已过期' }
   }
   return { ok: true, record }
+}
+
+// JSON 读取(直接基于 Blob 的 JSON 模式)
+export async function kvGetJSON(kv, key, fallback = null) {
+  if (!kv) return fallback
+  try {
+    const v = await kv.get(key, { type: 'json' })
+    return v === null || v === undefined ? fallback : v
+  } catch (_e) {
+    // value 不是合法 JSON 时降级为 text 再解析
+    try {
+      const text = await kv.get(key)
+      return text === null || text === undefined ? fallback : JSON.parse(text)
+    } catch (_e2) {
+      return fallback
+    }
+  }
+}
+
+// JSON 写入(序列化后存为文本)
+export async function kvPutJSON(kv, key, value) {
+  if (!kv) throw new Error('Blob 存储未就绪')
+  await kv.put(key, JSON.stringify(value))
 }

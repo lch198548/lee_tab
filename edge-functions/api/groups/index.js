@@ -11,7 +11,7 @@ import {
 // 获取所有分组及书签(完整数据)
 export async function onRequestGet({ env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
 
   const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
   if (!Array.isArray(groupsIndex) || groupsIndex.length === 0) {
@@ -40,7 +40,7 @@ export async function onRequestGet({ env }) {
 // 新建分组
 export async function onRequestPost({ request, env }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
 
   let body
   try {

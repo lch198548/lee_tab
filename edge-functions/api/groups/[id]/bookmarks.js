@@ -11,7 +11,7 @@ import {
 // POST /api/groups/:id/bookmarks  -> 添加书签到指定分组
 export async function onRequestPost({ request, env, params }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const { id } = params
   if (!id) return errorResponse('缺少分组 id', 400)
 
@@ -52,7 +52,7 @@ export async function onRequestPost({ request, env, params }) {
 // body: { bookmarks: Bookmark[] }
 export async function onRequestPut({ request, env, params }) {
   const kv = getKV(env)
-  if (!kv) return errorResponse('KV 未绑定', 500)
+  if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const { id } = params
   if (!id) return errorResponse('缺少分组 id', 400)
 
