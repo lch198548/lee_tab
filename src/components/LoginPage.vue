@@ -61,12 +61,15 @@ const firstSetup = ref(false)
 ;(async () => {
   try {
     const res = await fetch('/api/auth/check').then((r) => r.json())
-    if (res.reason === 'token 无效' || res.reason === 'token 已过期' || res.reason === '未登录') {
-      // 通过尝试 health 接口判断 KV 是否就绪,这里直接根据是否首次登录提示
-      firstSetup.value = false
+    if (res.loggedIn) {
+      // 已登录,App.vue 会自动跳转到主界面
+      return
     }
+    // passwordSet = false 表示首次使用,需设置密码
+    firstSetup.value = res.passwordSet === false
   } catch {
-    /* ignore */
+    // 接口异常时默认当作首次,更安全
+    firstSetup.value = true
   }
 })()
 

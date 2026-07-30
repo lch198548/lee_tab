@@ -75,7 +75,7 @@ async function request<T = unknown>(
 
 export const api = {
   // 鉴权
-  checkLogin: () => request<{ loggedIn: boolean; reason: string | null }>('/api/auth/check'),
+  checkLogin: () => request<{ loggedIn: boolean; reason: string | null; passwordSet: boolean }>('/api/auth/check'),
   login: (password: string) =>
     request<{ ok: boolean; firstSetup: boolean; expiresAt: number }>('/api/auth/login', {
       method: 'POST',
