@@ -1,12 +1,29 @@
 import { computed, watch } from 'vue'
 import { api } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { cacheConfig } from '@/utils/cache'
 
 export function useConfig() {
   const { state } = useAppStore()
 
   async function loadConfig() {
-    state.config = await api.getConfig()
+    // 优先从缓存加载
+    const cached = cacheConfig.get<typeof state.config>()
+    if (cached && !cached.expired) {
+      state.config = cached.data
+    } else if (cached) {
+      state.config = cached.data
+      // 后台异步刷新
+      api.getConfig().then((config) => {
+        state.config = config
+        cacheConfig.set(config)
+      }).catch(() => {})
+      return
+    }
+    // 无缓存,从后端加载
+    const config = await api.getConfig()
+    state.config = config
+    cacheConfig.set(config)
   }
 
   async function saveConfig(partial: Partial<typeof state.config>) {
@@ -14,6 +31,7 @@ export function useConfig() {
     const merged = { ...state.config, ...partial }
     state.config = merged
     await api.saveConfig(merged)
+    cacheConfig.set(merged)
   }
 
   // 应用主题到 <html>

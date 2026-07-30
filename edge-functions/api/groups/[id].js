@@ -39,16 +39,18 @@ export async function onRequestPut({ request, env, params }) {
     })
   }
 
-  await kvPutJSON(kv, 'groups_index', groupsIndex)
+  // 并行写入:更新 groups_index 和 group_<id>
+  const newName = groupsIndex[idx].name
+  const newSort = groupsIndex[idx].sort
+  const groupDataPromise = kvGetJSON(kv, `group_${id}`, { bookmarks: [] }).catch(() => ({ bookmarks: [] }))
 
-  // 同步更新 group_<id> 的元信息
-  const groupData = await kvGetJSON(kv, `group_${id}`, { bookmarks: [] })
-  await kvPutJSON(kv, `group_${id}`, {
-    id,
-    name: groupsIndex[idx].name,
-    sort: groupsIndex[idx].sort,
-    bookmarks: groupData.bookmarks || []
-  })
+  const [groupData] = await Promise.all([groupDataPromise, kvPutJSON(kv, 'groups_index', groupsIndex)])
+
+  if (groupData) {
+    groupData.name = newName
+    groupData.sort = newSort
+    await kvPutJSON(kv, `group_${id}`, groupData)
+  }
 
   return jsonResponse({ ok: true })
 }
@@ -60,20 +62,23 @@ export async function onRequestDelete({ env, params }) {
   const { id } = params
   if (!id) return errorResponse('缺少分组 id', 400)
 
-  const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
+  // 并行读取:同时获取 groups_index 和当前分组数据
+  const [groupsIndex] = await Promise.all([
+    kvGetJSON(kv, 'groups_index', [])
+  ])
+
   const idx = groupsIndex.findIndex((g) => g.id === id)
   if (idx === -1) return errorResponse('分组不存在', 404)
 
   groupsIndex.splice(idx, 1)
   // 重新编号 sort(连续)
   groupsIndex.forEach((g, i) => (g.sort = i))
-  await kvPutJSON(kv, 'groups_index', groupsIndex)
 
-  try {
-    await kv.delete(`group_${id}`)
-  } catch (_e) {
-    /* 忽略 */
-  }
+  // 并行写入:同时更新 groups_index 和删除分组数据
+  await Promise.all([
+    kvPutJSON(kv, 'groups_index', groupsIndex),
+    kv.delete(`group_${id}`).catch(() => {})
+  ])
 
   return jsonResponse({ ok: true })
 }

@@ -114,18 +114,6 @@
             </label>
           </div>
         </section>
-
-        <!-- 导入浏览器书签 -->
-        <section class="form-section">
-          <h4>导入浏览器书签</h4>
-          <p class="hint-text">支持 Edge / Chrome 导出的 HTML 书签文件,自动按文件夹创建分组</p>
-          <div class="backup-row">
-            <label class="btn-small file-btn">
-              <UploadIcon /> 选择书签 HTML 文件
-              <input type="file" accept=".html,.htm" @change="onImportBookmarksHTML" hidden />
-            </label>
-          </div>
-        </section>
       </div>
 
       <footer class="modal-footer">
@@ -143,7 +131,6 @@ import { reactive, ref, watch } from 'vue'
 import { api, type AppConfig } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
-import { useGroups } from '@/composables/useGroups'
 import {
   CloseIcon,
   TrashIcon,
@@ -155,7 +142,6 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { state } = useAppStore()
 const { saveConfig, loadConfig } = useConfig()
-const { loadGroups: reloadGroups, createGroup, addBookmark } = useGroups()
 
 const form = reactive<AppConfig>(JSON.parse(JSON.stringify(state.config || {
   title: '我的导航',
@@ -243,127 +229,6 @@ async function onImportFile(e: Event) {
     await loadConfig()
     setTimeout(() => window.location.reload(), 800)
   } catch (err) {
-    ;(window as any).$toast?.((err as Error).message, 'error')
-  }
-}
-
-// === 导入 Chrome/Edge HTML 书签 ===
-interface BookmarkNode {
-  name: string
-  type: 'folder' | 'bookmark'
-  url?: string
-  children?: BookmarkNode[]
-}
-
-function parseBookmarksHTML(html: string): BookmarkNode[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(html, 'text/html')
-
-  function walkNode(node: Element): BookmarkNode[] {
-    const result: BookmarkNode[] = []
-    // DTL 标签:书签文件夹
-    const dts = node.querySelectorAll(':scope > dt')
-    for (const dt of Array.from(dts)) {
-      const h3 = dt.querySelector(':scope > h3')
-      const anchor = dt.querySelector(':scope > a')
-      if (anchor) {
-        // 书签节点
-        result.push({
-          name: anchor.textContent?.trim() || '未命名',
-          type: 'bookmark',
-          url: anchor.getAttribute('href') || ''
-        })
-      } else if (h3) {
-        // 文件夹节点
-        const folderName = h3.textContent?.trim() || '未命名文件夹'
-        // 找到对应的 DD 节点
-        const dd = dt.nextElementSibling
-        const children: BookmarkNode[] = []
-        if (dd && dd.tagName === 'DD') {
-          // DD 内可能包含 DL > DT 结构
-          const innerDls = dd.querySelectorAll(':scope > dl')
-          for (const dl of Array.from(innerDls)) {
-            children.push(...walkNode(dl))
-          }
-          // DD 内可能直接包含 DT (某些导出格式)
-          const innerDts = dd.querySelectorAll(':scope > dt')
-          for (const innerDt of Array.from(innerDts)) {
-            const a = innerDt.querySelector(':scope > a')
-            if (a) {
-              children.push({
-                name: a.textContent?.trim() || '未命名',
-                type: 'bookmark',
-                url: a.getAttribute('href') || ''
-              })
-            }
-          }
-        }
-        result.push({ name: folderName, type: 'folder', children })
-      }
-    }
-    return result
-  }
-
-  // 找到根 DL
-  const rootDl = doc.querySelector('dl')
-  if (!rootDl) return []
-  return walkNode(rootDl)
-}
-
-async function onImportBookmarksHTML(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  if (!confirm('将导入书签,按文件夹自动创建分组。是否继续?')) return
-
-  try {
-    const html = await file.text()
-    const tree = parseBookmarksHTML(html)
-    if (tree.length === 0) {
-      ;(window as any).$toast?.('未解析到任何书签', 'error')
-      return
-    }
-
-    let groupCount = 0
-    let bookmarkCount = 0
-
-    async function importFolder(node: BookmarkNode, defaultFolderId?: string) {
-      if (node.type === 'bookmark' && node.url) {
-        if (!defaultFolderId) return
-        await addBookmark(defaultFolderId, {
-          name: node.name,
-          url: node.url,
-          favorite: false
-        })
-        bookmarkCount++
-      } else if (node.type === 'folder' && node.children) {
-        // 跳过顶层 "书签栏" / "Other Bookmarks" 等默认文件夹
-        const skipNames = ['书签栏', '其他书签', 'Bookmarks Bar', 'Other Bookmarks', 'Mobile Bookmarks', '移动书签']
-        if (!defaultFolderId && skipNames.includes(node.name)) {
-          for (const child of node.children) {
-            await importFolder(child)
-          }
-          return
-        }
-        // 创建分组
-        const res = await createGroup(node.name || '导入分组')
-        groupCount++
-        const folderId = res.group.id
-        // 递归导入子节点
-        for (const child of node.children) {
-          await importFolder(child, folderId)
-        }
-      }
-    }
-
-    for (const rootNode of tree) {
-      await importFolder(rootNode)
-    }
-
-    await reloadGroups()
-    ;(window as any).$toast?.(`导入完成: ${groupCount} 个分组, ${bookmarkCount} 个书签`, 'success')
-    emit('close')
-  } catch (err) {
-    console.error(err)
     ;(window as any).$toast?.((err as Error).message, 'error')
   }
 }
@@ -546,13 +411,6 @@ async function onImportBookmarksHTML(e: Event) {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.hint-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0 0 10px;
-  line-height: 1.5;
 }
 
 .mini-btn {

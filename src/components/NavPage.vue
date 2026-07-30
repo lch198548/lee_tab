@@ -136,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import Draggable from 'vuedraggable'
 import DateTime from './DateTime.vue'
 import SearchBar from './SearchBar.vue'
@@ -224,8 +224,9 @@ function switchTo(i: number) {
   currentIndex.value = next
 }
 
-// 滚轮切换分组(带节流,避免滚动过快)
-let lastWheelTime = 0
+// 滚轮切换分组(累积 deltaY,达到阈值切换一个,支持持续滚动)
+let wheelAccum = 0
+const WHEEL_THRESHOLD = 80
 function onWheel(e: WheelEvent) {
   const target = e.target as HTMLElement
   if (
@@ -237,14 +238,18 @@ function onWheel(e: WheelEvent) {
   ) {
     return
   }
-  const now = Date.now()
-  if (now - lastWheelTime < 400) return
-  lastWheelTime = now
-  if (e.deltaY > 0) {
-    switchTo(currentIndex.value + 1)
-  } else if (e.deltaY < 0) {
-    switchTo(currentIndex.value - 1)
+  wheelAccum += e.deltaY
+  if (Math.abs(wheelAccum) >= WHEEL_THRESHOLD) {
+    if (wheelAccum > 0) {
+      switchTo(currentIndex.value + 1)
+    } else {
+      switchTo(currentIndex.value - 1)
+    }
+    wheelAccum = 0
   }
+  // 停止滚动一小段时间后重置
+  clearTimeout((onWheel as any)._timer)
+  ;(onWheel as any)._timer = setTimeout(() => { wheelAccum = 0 }, 200)
 }
 
 // 键盘左右切换
@@ -365,6 +370,11 @@ onMounted(async () => {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }
   window.addEventListener('keydown', onKeydown)
+  // 加载完成后自动聚焦搜索框
+  nextTick(() => {
+    const input = document.querySelector('.search-box input') as HTMLInputElement
+    if (input) input.focus()
+  })
 })
 </script>
 
@@ -445,7 +455,7 @@ onMounted(async () => {
 /* 分组切换标签 */
 .group-tabs {
   display: flex;
-  gap: 6px;
+  gap: 0;
   flex-wrap: wrap;
   justify-content: center;
   max-width: 100%;
@@ -465,6 +475,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin: 0 4px;
 }
 
 .group-tab:hover {
