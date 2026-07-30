@@ -10,7 +10,8 @@ export async function onRequestGet({ request, env }) {
   let passwordSet = false
   if (kv) {
     const stored = await kvGetJSON(kv, 'auth_password', null)
-    passwordSet = !!(stored && stored.hash)
+    // 兼容新格式(value)和旧格式(hash)
+    passwordSet = !!(stored && (stored.value || stored.hash))
   }
 
   return jsonResponse({
