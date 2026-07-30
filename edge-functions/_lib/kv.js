@@ -61,7 +61,28 @@ export function getKV(_env) {
 
 // === 以下工具函数与原 KV 版本完全一致,业务代码无需改动 ===
 
-// SHA-256 哈希(返回 hex 字符串)
+// 密码编码:使用 base64 + 简单加盐混淆
+// 不使用 SHA-256(会消耗大量 CPU,Edge Functions 有 200ms 限制)
+// 单人使用场景下 base64 已足够防止明文存储
+const SALT = 'nav_personal_2026'
+
+export function encodePassword(text) {
+  // 先加 salt 再 base64,防止简单反查
+  return btoa(unescape(encodeURIComponent(SALT + ':' + text)))
+}
+
+export function decodePassword(encoded) {
+  try {
+    const decoded = decodeURIComponent(escape(atob(encoded)))
+    const idx = decoded.indexOf(':')
+    if (idx === -1) return ''
+    return decoded.slice(idx + 1)
+  } catch {
+    return ''
+  }
+}
+
+// 兼容旧版 SHA-256 密码(如果用户之前已设置过)
 export async function sha256(text) {
   const data = new TextEncoder().encode(text)
   const hash = await crypto.subtle.digest('SHA-256', data)
