@@ -1,0 +1,24 @@
+{
+  "name": "personal-nav",
+  "version": "1.0.0",
+  "description": "个人导航页 - 部署在腾讯 EdgeOne Makers,数据存储于 EdgeOne KV",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:edge": "edgeone makers dev",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.21",
+    "vuedraggable": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10",
+    "vue-tsc": "^2.0.13"
+  }
+}
