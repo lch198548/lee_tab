@@ -25,14 +25,10 @@ export async function onRequestPost({ request, env }) {
   } catch (e) {
     return errorResponse('请求体格式错误: ' + e.message, 400)
   }
-  if (!body || !body.content || !body.content.trim()) {
-    return errorResponse('便利贴内容不能为空', 400)
-  }
-
   const notes = await kvGetJSON(kv, 'notes', [])
   const note = {
     id: shortId(),
-    content: body.content.trim(),
+    content: (body?.content || '').trim(),
     bgColor: body.bgColor || '#fef08a',
     textColor: body.textColor || '#1e293b',
     x: body.x ?? 100,

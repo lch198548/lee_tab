@@ -38,8 +38,10 @@ export function useNotes() {
   }
 
   async function deleteNote(id: string) {
+    const idx = notes.value.findIndex((n) => n.id === id)
+    if (idx === -1) return
     await api.deleteNote(id)
-    notes.value = notes.value.filter((n) => n.id !== id)
+    notes.value.splice(idx, 1)
   }
 
   async function saveAllPositions() {
