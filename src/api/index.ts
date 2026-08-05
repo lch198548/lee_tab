@@ -39,6 +39,19 @@ export interface Group {
   bookmarks: Bookmark[]
 }
 
+export interface Note {
+  id: string
+  content: string
+  bgColor: string
+  textColor: string
+  x: number
+  y: number
+  width: number
+  height: number
+  createdAt: number
+  updatedAt: number
+}
+
 export interface GroupsResponse {
   groups: Group[]
 }
@@ -116,6 +129,26 @@ export const api = {
     request<{ ok: boolean; bookmarks: Bookmark[] }>(`/api/groups/${groupId}/bookmarks`, {
       method: 'PUT',
       body: JSON.stringify({ bookmarks })
+    }),
+
+  // 便利贴
+  getNotes: () => request<{ notes: Note[] }>('/api/notes'),
+  createNote: (note: Partial<Note>) =>
+    request<{ ok: boolean; note: Note }>('/api/notes', {
+      method: 'POST',
+      body: JSON.stringify(note)
+    }),
+  updateNote: (id: string, payload: Partial<Note>) =>
+    request<{ ok: boolean }>(`/api/notes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+  deleteNote: (id: string) =>
+    request<{ ok: boolean }>(`/api/notes/${id}`, { method: 'DELETE' }),
+  saveAllNotes: (notes: Note[]) =>
+    request<{ ok: boolean }>('/api/notes', {
+      method: 'PUT',
+      body: JSON.stringify({ notes })
     }),
 
   // 备份

@@ -12,6 +12,9 @@
         <button class="icon-btn danger" title="删除当前分组" @click="onDeleteGroup">
           <TrashIcon />
         </button>
+        <button class="icon-btn" title="新建便利贴" @click="onAddNote">
+          <NoteIcon />
+        </button>
         <button class="icon-btn" title="设置" @click="state.settingsOpen = true">
           <GearIcon />
         </button>
@@ -131,6 +134,13 @@
       :bookmark="editor.bookmark"
       @close="editor.open = false"
     />
+
+    <!-- 便利贴层 -->
+    <StickyNote
+      v-for="note in notes"
+      :key="note.id"
+      :note="note"
+    />
   </div>
 </template>
 
@@ -143,18 +153,21 @@ import BookmarkCard from './BookmarkCard.vue'
 import GroupSidebar from './GroupSidebar.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import BookmarkEditor from './BookmarkEditor.vue'
+import StickyNote from './StickyNote.vue'
 import {
   PlusIcon,
   GearIcon,
   LogoutIcon,
   EditIcon,
   TrashIcon,
-  StarFilledIcon
+  StarFilledIcon,
+  NoteIcon
 } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useAuth } from '@/composables/useAuth'
 import { useGroups } from '@/composables/useGroups'
 import { useConfig } from '@/composables/useConfig'
+import { useNotes } from '@/composables/useNotes'
 import type { Bookmark, Group } from '@/api'
 
 // 虚拟分组ID:代表"常用"
@@ -165,6 +178,7 @@ const { state } = useAppStore()
 const { logout } = useAuth()
 const { loadGroups, createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort } = useGroups()
 const { loadConfig } = useConfig()
+const { notes, loadNotes, createNote: createNoteApi } = useNotes()
 
 const editor = reactive<{ open: boolean; groupId: string; bookmark: Bookmark | null }>({
   open: false,
@@ -351,6 +365,16 @@ async function onLogout() {
   await logout()
 }
 
+async function onAddNote() {
+  const content = window.prompt('输入便利贴内容', '')
+  if (!content || !content.trim()) return
+  try {
+    await createNoteApi(content.trim())
+  } catch (e) {
+    ;(window as any).$toast?.((e as Error).message, 'error')
+  }
+}
+
 onMounted(async () => {
   if (!state.config) {
     try {
@@ -365,6 +389,7 @@ onMounted(async () => {
   } catch (e) {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }
+  loadNotes().catch(() => {})
   window.addEventListener('keydown', onKeydown)
   // 加载完成后自动聚焦搜索框
   nextTick(() => {
