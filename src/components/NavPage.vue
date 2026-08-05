@@ -366,10 +366,13 @@ async function onLogout() {
 }
 
 async function onAddNote() {
-  const content = window.prompt('输入便利贴内容', '')
-  if (!content || !content.trim()) return
   try {
-    await createNoteApi(content.trim())
+    const note = await createNoteApi('')
+    // 创建后自动聚焦编辑
+    nextTick(() => {
+      const el = document.querySelector(`.sticky-note[data-id="${note.id}"] textarea`) as HTMLTextAreaElement
+      if (el) el.focus()
+    })
   } catch (e) {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }

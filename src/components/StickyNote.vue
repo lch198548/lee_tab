@@ -1,11 +1,11 @@
 <template>
   <div
     class="sticky-note"
+    :data-id="note.id"
     :style="noteStyle"
-    @mousedown="onStartDrag"
   >
-    <div class="note-header" @mousedown.stop>
-      <div class="color-tools">
+    <div class="note-header" @mousedown="onStartDrag">
+      <div class="color-tools" @mousedown.stop>
         <div class="color-picker-wrap">
           <input
             type="color"
@@ -25,8 +25,8 @@
           />
         </div>
       </div>
-      <div class="note-actions">
-        <button class="note-btn" title="编辑" @click="editing = true">
+      <div class="note-actions" @mousedown.stop>
+        <button class="note-btn" title="编辑" @click="toggleEdit">
           <EditIcon />
         </button>
         <button class="note-btn danger" title="删除" @click="onDelete">
@@ -42,22 +42,27 @@
         :style="{ color: note.textColor }"
         @blur="onSaveEdit"
         @keydown.ctrl.enter.prevent="onSaveEdit"
-        auto-focus
       />
       <div
         v-else
         class="note-text"
         :style="{ color: note.textColor }"
-        @dblclick="editing = true"
+        @dblclick="toggleEdit"
       >
-        {{ note.content }}
+        {{ note.content || '双击编辑...' }}
       </div>
     </div>
+    <!-- 缩放手柄:右下角 -->
+    <div class="resize-handle resize-se" @mousedown.stop="onStartResize('se', $event)" />
+    <!-- 缩放手柄:右边 -->
+    <div class="resize-handle resize-e" @mousedown.stop="onStartResize('e', $event)" />
+    <!-- 缩放手柄:下边 -->
+    <div class="resize-handle resize-s" @mousedown.stop="onStartResize('s', $event)" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { Note } from '@/api'
 import { useNotes } from '@/composables/useNotes'
 import { EditIcon, TrashIcon } from './icons'
@@ -81,7 +86,20 @@ const noteStyle = computed(() => ({
   color: props.note.textColor
 }))
 
-// 拖拽
+function toggleEdit() {
+  editing.value = !editing.value
+  if (editing.value) {
+    nextTick(() => {
+      const ta = document.querySelector(`.sticky-note[data-id="${props.note.id}"] textarea`) as HTMLTextAreaElement
+      if (ta) {
+        ta.focus()
+        ta.select()
+      }
+    })
+  }
+}
+
+// === 拖拽 ===
 let dragging = false
 let startX = 0
 let startY = 0
@@ -89,7 +107,12 @@ let noteStartX = 0
 let noteStartY = 0
 
 function onStartDrag(e: MouseEvent) {
+  // 只在点击 header 空白处或 color-tools 区域触发(按钮区域已 stop)
   if (editing.value) return
+  const target = e.target as HTMLElement
+  // 如果点在按钮或颜色选择器上,不触发拖拽
+  if (target.closest('.note-btn') || target.closest('.color-input')) return
+  e.preventDefault()
   dragging = true
   startX = e.clientX
   startY = e.clientY
@@ -102,7 +125,6 @@ function onStartDrag(e: MouseEvent) {
     const dy = ev.clientY - startY
     let newX = noteStartX + dx
     let newY = noteStartY + dy
-    // 限制在窗口内
     newX = Math.max(0, Math.min(window.innerWidth - props.note.width, newX))
     newY = Math.max(0, Math.min(window.innerHeight - props.note.height, newY))
     props.note.x = newX
@@ -113,8 +135,55 @@ function onStartDrag(e: MouseEvent) {
     dragging = false
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
-    // 保存位置
     updateNote(props.note.id, { x: props.note.x, y: props.note.y }).catch(() => {})
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+// === 缩放 ===
+let resizing = false
+let resizeDir = ''
+let resizeStartX = 0
+let resizeStartY = 0
+let resizeStartW = 0
+let resizeStartH = 0
+
+function onStartResize(dir: string, e: MouseEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  resizing = true
+  resizeDir = dir
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartW = props.note.width
+  resizeStartH = props.note.height
+
+  const onMove = (ev: MouseEvent) => {
+    if (!resizing) return
+    const dx = ev.clientX - resizeStartX
+    const dy = ev.clientY - resizeStartY
+    let newW = resizeStartW
+    let newH = resizeStartH
+    const minW = 120
+    const minH = 100
+
+    if (dir.includes('e')) {
+      newW = Math.max(minW, resizeStartW + dx)
+    }
+    if (dir.includes('s')) {
+      newH = Math.max(minH, resizeStartH + dy)
+    }
+    props.note.width = newW
+    props.note.height = newH
+  }
+
+  const onUp = () => {
+    resizing = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    updateNote(props.note.id, { width: props.note.width, height: props.note.height }).catch(() => {})
   }
 
   document.addEventListener('mousemove', onMove)
@@ -135,7 +204,7 @@ function onTextColorChange(e: Event) {
 
 function onSaveEdit() {
   editing.value = false
-  const content = editContent.value.trim()
+  const content = editContent.value
   if (content !== props.note.content) {
     props.note.content = content
     updateNote(props.note.id, { content }).catch(() => {})
@@ -265,5 +334,58 @@ async function onDelete() {
   font-family: inherit;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 缩放手柄 */
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+}
+
+.resize-se {
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: se-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.2) 40%,
+    rgba(0, 0, 0, 0.2) 55%,
+    transparent 55%,
+    transparent 70%,
+    rgba(0, 0, 0, 0.2) 70%,
+    rgba(0, 0, 0, 0.2) 85%,
+    transparent 85%
+  );
+  border-radius: 0 0 6px 0;
+}
+
+.resize-e {
+  right: 0;
+  top: 24px;
+  bottom: 14px;
+  width: 6px;
+  cursor: e-resize;
+  border-radius: 0 3px 3px 0;
+}
+
+.resize-e:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.resize-s {
+  left: 24px;
+  right: 14px;
+  bottom: 0;
+  height: 6px;
+  cursor: s-resize;
+  border-radius: 0 0 3px 3px;
+}
+
+.resize-s:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 </style>
