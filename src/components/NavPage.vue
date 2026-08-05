@@ -543,8 +543,8 @@ onMounted(async () => {
 
 .bookmark-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 4px;
   width: 100%;
 }
 
@@ -644,8 +644,8 @@ onMounted(async () => {
     height: 15px;
   }
   .bookmark-grid {
-    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+    gap: 3px;
   }
   .group-tab {
     padding: 5px 12px;

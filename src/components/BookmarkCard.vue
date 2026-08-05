@@ -130,8 +130,8 @@ async function onDelete() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 6px 6px;
+  gap: 2px;
+  padding: 4px 2px;
   width: 100%;
   text-decoration: none;
   color: inherit;
