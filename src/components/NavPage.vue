@@ -39,7 +39,6 @@
           chosen-class="drag-chosen"
           drag-class="drag-dragging"
           :move="canMoveGroup"
-          @change="onGroupSort"
         >
           <template #item="{ element, index }">
             <button
@@ -182,15 +181,30 @@ const editor = reactive<{ open: boolean; groupId: string; bookmark: Bookmark | n
 const pageRef = ref<HTMLElement | null>(null)
 const currentIndex = ref(0)
 
-// 合成分组列表:常用(虚拟) + 真实分组
-const allGroups = computed(() => {
-  const favGroup: Group = {
-    id: FAV_GROUP_ID,
-    name: FAV_GROUP_NAME,
-    sort: -1,
-    bookmarks: []
+// 合成分组列表:常用(虚拟) + 真实分组(可写,支持拖拽排序)
+const allGroups = computed<Group[]>({
+  get() {
+    const favGroup: Group = {
+      id: FAV_GROUP_ID,
+      name: FAV_GROUP_NAME,
+      sort: -1,
+      bookmarks: []
+    }
+    return [favGroup, ...state.groups]
+  },
+  set(newList: Group[]) {
+    // 过滤掉虚拟常用组,只保留真实分组
+    const realGroups = newList.filter((g) => g.id !== FAV_GROUP_ID)
+    // 更新 state.groups 的顺序
+    state.groups = realGroups.map((g, i) => ({ ...g, sort: i }))
+    // 异步保存排序
+    const sorts = realGroups.map((g, i) => ({ id: g.id, sort: i }))
+    if (sorts.length > 0) {
+      saveGroupSort(sorts).catch((e) => {
+        ;(window as any).$toast?.((e as Error).message, 'error')
+      })
+    }
   }
-  return [favGroup, ...state.groups]
 })
 
 // 当前选中的分组(含虚拟常用组)
@@ -269,24 +283,6 @@ function canMoveGroup(evt: any) {
     return false
   }
   return true
-}
-
-// 分组排序变更
-async function onGroupSort(newList: Group[]) {
-  // 保持常用组在第一个位置
-  const favIdx = newList.findIndex((g) => g.id === FAV_GROUP_ID)
-  if (favIdx > 0) {
-    const [fav] = newList.splice(favIdx, 1)
-    newList.unshift(fav)
-  }
-  // 过滤出真实分组(不含虚拟常用组)
-  const realGroups = newList.filter((g) => g.id !== FAV_GROUP_ID)
-  const sorts = realGroups.map((g, i) => ({ id: g.id, sort: i }))
-  try {
-    await saveGroupSort(sorts)
-  } catch (e) {
-    ;(window as any).$toast?.((e as Error).message, 'error')
-  }
 }
 
 // 书签排序变更
