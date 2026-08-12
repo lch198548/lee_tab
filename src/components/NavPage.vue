@@ -15,6 +15,9 @@
         <button class="icon-btn" title="新建便利贴" @click="onAddNote">
           <NoteIcon />
         </button>
+        <button class="icon-btn" :class="{ active: todoOpen }" title="待办清单" @click="todoOpen = !todoOpen">
+          <TodoIcon />
+        </button>
         <button class="icon-btn" title="设置" @click="state.settingsOpen = true">
           <GearIcon />
         </button>
@@ -141,6 +144,16 @@
       :key="note.id"
       :note="note"
     />
+
+    <!-- 待办清单面板 -->
+    <TodoPanel v-if="todoOpen" @add="todoInputOpen = true" />
+
+    <!-- 新建待办输入模态框 -->
+    <TodoInputModal
+      v-if="todoInputOpen"
+      @submit="onCreateTodo"
+      @close="todoInputOpen = false"
+    />
   </div>
 </template>
 
@@ -154,6 +167,8 @@ import GroupSidebar from './GroupSidebar.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import BookmarkEditor from './BookmarkEditor.vue'
 import StickyNote from './StickyNote.vue'
+import TodoPanel from './TodoPanel.vue'
+import TodoInputModal from './TodoInputModal.vue'
 import {
   PlusIcon,
   GearIcon,
@@ -161,13 +176,15 @@ import {
   EditIcon,
   TrashIcon,
   StarFilledIcon,
-  NoteIcon
+  NoteIcon,
+  TodoIcon
 } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useAuth } from '@/composables/useAuth'
 import { useGroups } from '@/composables/useGroups'
 import { useConfig } from '@/composables/useConfig'
 import { useNotes } from '@/composables/useNotes'
+import { useTodos } from '@/composables/useTodos'
 import type { Bookmark, Group } from '@/api'
 
 // 虚拟分组ID:代表"常用"
@@ -179,6 +196,11 @@ const { logout } = useAuth()
 const { loadGroups, createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort } = useGroups()
 const { loadConfig } = useConfig()
 const { notes, loadNotes, createNote: createNoteApi } = useNotes()
+const { loadTodos, createTodo: createTodoApi } = useTodos()
+
+// 待办状态
+const todoOpen = ref(false)
+const todoInputOpen = ref(false)
 
 const editor = reactive<{ open: boolean; groupId: string; bookmark: Bookmark | null }>({
   open: false,
@@ -378,6 +400,15 @@ async function onAddNote() {
   }
 }
 
+async function onCreateTodo(text: string) {
+  try {
+    await createTodoApi(text)
+    todoOpen.value = true
+  } catch (e) {
+    ;(window as any).$toast?.((e as Error).message, 'error')
+  }
+}
+
 onMounted(async () => {
   if (!state.config) {
     try {
@@ -393,6 +424,7 @@ onMounted(async () => {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }
   loadNotes().catch(() => {})
+  loadTodos().catch(() => {})
   window.addEventListener('keydown', onKeydown)
   // 加载完成后自动聚焦搜索框
   nextTick(() => {

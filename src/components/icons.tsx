@@ -61,3 +61,8 @@ export const PaletteIcon = make(
 export const BoldIcon = make(
   '<path d="M6 4h8a4 4 0 0 1 0 8H6z"/><path d="M6 12h9a4 4 0 0 1 0 8H6z"/>'
 )
+export const TodoIcon = make(
+  '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'
+)
+export const CheckIcon = make('<polyline points="20 6 9 17 4 12"/>')
+export const ClockIcon = make('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')

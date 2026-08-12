@@ -52,6 +52,14 @@ export interface Note {
   updatedAt: number
 }
 
+export interface Todo {
+  id: string
+  text: string
+  done: boolean
+  createdAt: number
+  completedAt: number | null
+}
+
 export interface GroupsResponse {
   groups: Group[]
 }
@@ -150,6 +158,21 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ notes })
     }),
+
+  // To-do List
+  getTodos: () => request<{ todos: Todo[] }>('/api/todos'),
+  createTodo: (text: string) =>
+    request<{ ok: boolean; todo: Todo }>('/api/todos', {
+      method: 'POST',
+      body: JSON.stringify({ text })
+    }),
+  updateTodo: (id: string, payload: { text?: string; done?: boolean }) =>
+    request<{ ok: boolean }>(`/api/todos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+  deleteTodo: (id: string) =>
+    request<{ ok: boolean }>(`/api/todos/${id}`, { method: 'DELETE' }),
 
   // 备份
   exportBackup: async (): Promise<string> => {
