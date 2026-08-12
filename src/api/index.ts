@@ -174,6 +174,11 @@ export const api = {
   deleteTodo: (id: string) =>
     request<{ ok: boolean }>(`/api/todos/${id}`, { method: 'DELETE' }),
 
+  // UI 状态(面板位置等)
+  getUIState: () => request<Record<string, unknown>>('/api/ui'),
+  saveUIState: (state: Record<string, unknown>) =>
+    request<{ ok: boolean }>('/api/ui', { method: 'PUT', body: JSON.stringify(state) }),
+
   // 备份
   exportBackup: async (): Promise<string> => {
     const res = await fetch('/api/backup', { credentials: 'include' })

@@ -15,9 +15,6 @@
         <button class="icon-btn" title="新建便利贴" @click="onAddNote">
           <NoteIcon />
         </button>
-        <button class="icon-btn" :class="{ active: todoOpen }" title="待办清单" @click="todoOpen = !todoOpen">
-          <TodoIcon />
-        </button>
         <button class="icon-btn" title="设置" @click="state.settingsOpen = true">
           <GearIcon />
         </button>
@@ -146,7 +143,7 @@
     />
 
     <!-- 待办清单面板 -->
-    <TodoPanel v-if="todoOpen" @add="todoInputOpen = true" />
+    <TodoPanel @add="todoInputOpen = true" />
 
     <!-- 新建待办输入模态框 -->
     <TodoInputModal
@@ -176,8 +173,7 @@ import {
   EditIcon,
   TrashIcon,
   StarFilledIcon,
-  NoteIcon,
-  TodoIcon
+  NoteIcon
 } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useAuth } from '@/composables/useAuth'
@@ -185,6 +181,7 @@ import { useGroups } from '@/composables/useGroups'
 import { useConfig } from '@/composables/useConfig'
 import { useNotes } from '@/composables/useNotes'
 import { useTodos } from '@/composables/useTodos'
+import { useUI } from '@/composables/useUI'
 import type { Bookmark, Group } from '@/api'
 
 // 虚拟分组ID:代表"常用"
@@ -197,9 +194,9 @@ const { loadGroups, createGroup, renameGroup, deleteGroup, saveBookmarks, saveGr
 const { loadConfig } = useConfig()
 const { notes, loadNotes, createNote: createNoteApi } = useNotes()
 const { loadTodos, createTodo: createTodoApi } = useTodos()
+const { loadUI } = useUI()
 
 // 待办状态
-const todoOpen = ref(false)
 const todoInputOpen = ref(false)
 
 const editor = reactive<{ open: boolean; groupId: string; bookmark: Bookmark | null }>({
@@ -403,7 +400,6 @@ async function onAddNote() {
 async function onCreateTodo(text: string) {
   try {
     await createTodoApi(text)
-    todoOpen.value = true
   } catch (e) {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }
@@ -425,6 +421,7 @@ onMounted(async () => {
   }
   loadNotes().catch(() => {})
   loadTodos().catch(() => {})
+  loadUI().catch(() => {})
   window.addEventListener('keydown', onKeydown)
   // 加载完成后自动聚焦搜索框
   nextTick(() => {

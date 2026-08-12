@@ -1,14 +1,18 @@
 <template>
-  <div class="todo-panel">
-    <div class="todo-header">
+  <div
+    class="todo-panel"
+    :style="panelStyle"
+    ref="panelRef"
+  >
+    <div class="todo-header" @mousedown="onStartDrag">
       <span class="todo-title">待办</span>
-      <button class="todo-tab-btn" :class="{ active: tab === 'active' }" @click="tab = 'active'">
+      <button class="todo-tab-btn" :class="{ active: tab === 'active' }" @click.stop="tab = 'active'">
         进行中 ({{ activeTodos.length }})
       </button>
-      <button class="todo-tab-btn" :class="{ active: tab === 'done' }" @click="tab = 'done'">
+      <button class="todo-tab-btn" :class="{ active: tab === 'done' }" @click.stop="tab = 'done'">
         已完成 ({{ doneTodos.length }})
       </button>
-      <button class="todo-add-btn" title="新建待办" @click="$emit('add')">
+      <button class="todo-add-btn" title="新建待办" @click.stop="$emit('add')">
         <PlusIcon />
       </button>
     </div>
@@ -17,8 +21,8 @@
       <!-- 进行中 -->
       <template v-if="tab === 'active'">
         <div v-if="activeTodos.length === 0" class="todo-empty">暂无待办</div>
-        <div v-for="t in activeTodos" :key="t.id" class="todo-item">
-          <button class="todo-check" @click="onToggle(t.id)" title="标记完成">
+        <div v-for="t in activeTodos" :key="t.id" class="todo-item" @mousedown.stop>
+          <button class="todo-check" @click.stop="onToggle(t.id)" title="标记完成">
             <CheckIcon />
           </button>
           <span class="todo-text">{{ t.text }}</span>
@@ -29,13 +33,13 @@
       <!-- 已完成 -->
       <template v-if="tab === 'done'">
         <div v-if="doneTodos.length === 0" class="todo-empty">暂无已完成任务</div>
-        <div v-for="t in doneTodos" :key="t.id" class="todo-item done">
+        <div v-for="t in doneTodos" :key="t.id" class="todo-item done" @mousedown.stop>
           <span class="todo-check done-check">
             <CheckIcon />
           </span>
           <span class="todo-text done-text">{{ t.text }}</span>
           <span class="todo-date">{{ formatDate(t.completedAt || t.createdAt) }}</span>
-          <button class="todo-del" @click="onDelete(t.id)" title="删除">
+          <button class="todo-del" @click.stop="onDelete(t.id)" title="删除">
             <TrashIcon />
           </button>
         </div>
@@ -45,14 +49,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTodos } from '@/composables/useTodos'
+import { useUI } from '@/composables/useUI'
 import { CheckIcon, TrashIcon, PlusIcon } from './icons'
 
 defineEmits<{ (e: 'add'): void }>()
 
 const { activeTodos, doneTodos, toggleTodo, deleteTodo } = useTodos()
+const { ui, setPanelPos } = useUI()
 const tab = ref<'active' | 'done'>('active')
+const panelRef = ref<HTMLElement | null>(null)
+
+const PANEL_W = 300
+const DEFAULT_RIGHT_PAD = 16
+
+// 使用 left 来定位; x<0 表示相对右边(用于初始默认位置)
+const panelStyle = computed(() => {
+  // 初始加载时 ui.todoPanelX 还是默认 -16(表示相对右边)
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1440
+  let leftPx: number
+  if (ui.todoPanelX < 0 && ui.todoPanelX > -9999) {
+    // 初始未拖动前: right = -todoPanelX
+    leftPx = viewportW - PANEL_W + ui.todoPanelX
+  } else {
+    leftPx = ui.todoPanelX
+  }
+  return {
+    left: `${leftPx}px`,
+    top: `${ui.todoPanelY}px`
+  }
+})
 
 function formatDate(ts: number) {
   const d = new Date(ts)
@@ -68,16 +95,62 @@ async function onToggle(id: string) {
 async function onDelete(id: string) {
   await deleteTodo(id)
 }
+
+// 拖拽
+let dragging = false
+let startX = 0
+let startY = 0
+let startLeft = 0
+let startTop = 0
+
+function onStartDrag(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  // 如果点在按钮/颜色选择器/输入框上, 不触发
+  if (target.closest('button') || target.closest('input') || target.closest('a')) return
+  e.preventDefault()
+
+  dragging = true
+  startX = e.clientX
+  startY = e.clientY
+
+  // 从 style.left / style.top 取当前像素值
+  const rect = panelRef.value?.getBoundingClientRect()
+  startLeft = rect?.left ?? 0
+  startTop = rect?.top ?? 0
+
+  const onMove = (ev: MouseEvent) => {
+    if (!dragging) return
+    const dx = ev.clientX - startX
+    const dy = ev.clientY - startY
+    let newLeft = startLeft + dx
+    let newTop = startTop + dy
+    // 限制在窗口内
+    const w = window.innerWidth
+    const h = window.innerHeight
+    newLeft = Math.max(-PANEL_W + 40, Math.min(w - 40, newLeft))
+    const panelH = panelRef.value?.offsetHeight || 400
+    newTop = Math.max(0, Math.min(h - 40, newTop))
+    setPanelPos('todoPanelX', Math.round(newLeft))
+    setPanelPos('todoPanelY', Math.round(newTop))
+  }
+
+  const onUp = () => {
+    dragging = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 </script>
 
 <style scoped>
 .todo-panel {
   position: fixed;
-  top: 60px;
-  right: 16px;
+  z-index: 900;
   width: 300px;
   max-height: 60vh;
-  z-index: 900;
   background: rgba(30, 41, 59, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -96,6 +169,8 @@ async function onDelete(id: string) {
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  cursor: move;
+  user-select: none;
 }
 
 .todo-title {
