@@ -2,6 +2,8 @@ import {
   getKV,
   kvGetJSON,
   kvPutJSON,
+  getGroupsData,
+  saveGroupsData,
   jsonResponse,
   errorResponse,
   parseJSONBody
@@ -13,19 +15,7 @@ export async function onRequestGet({ env }) {
   if (!kv) return errorResponse('Blob 存储未就绪', 500)
 
   const config = await kvGetJSON(kv, 'config', null)
-  const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
-
-  const groups = await Promise.all(
-    (Array.isArray(groupsIndex) ? groupsIndex : []).map(async (g) => {
-      const data = await kvGetJSON(kv, `group_${g.id}`, { bookmarks: [] })
-      return {
-        id: g.id,
-        name: g.name,
-        sort: g.sort,
-        bookmarks: data.bookmarks || []
-      }
-    })
-  )
+  const groups = await getGroupsData(kv)
 
   const payload = {
     version: 1,
@@ -63,19 +53,14 @@ export async function onRequestPost({ request, env }) {
     await kvPutJSON(kv, 'config', body.config)
   }
 
-  // 写入分组及书签
-  const groupsIndex = []
-  for (const g of body.groups) {
-    const id = g.id || Math.random().toString(36).slice(2, 10)
-    groupsIndex.push({ id, name: g.name || '未命名', sort: typeof g.sort === 'number' ? g.sort : groupsIndex.length })
-    await kvPutJSON(kv, `group_${id}`, {
-      id,
-      name: g.name || '未命名',
-      sort: groupsIndex[groupsIndex.length - 1].sort,
-      bookmarks: Array.isArray(g.bookmarks) ? g.bookmarks : []
-    })
-  }
-  await kvPutJSON(kv, 'groups_index', groupsIndex)
+  // 写入分组及书签(单 Blob)
+  const groups = body.groups.map((g, i) => ({
+    id: g.id || Math.random().toString(36).slice(2, 10),
+    name: g.name || '未命名',
+    sort: typeof g.sort === 'number' ? g.sort : i,
+    bookmarks: Array.isArray(g.bookmarks) ? g.bookmarks : []
+  }))
+  await saveGroupsData(kv, groups)
 
-  return jsonResponse({ ok: true, count: groupsIndex.length })
+  return jsonResponse({ ok: true, count: groups.length })
 }

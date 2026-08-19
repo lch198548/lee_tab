@@ -203,3 +203,45 @@ export async function kvPutJSON(kv, key, value) {
   if (!kv) throw new Error('Blob 存储未就绪')
   await kv.put(key, JSON.stringify(value))
 }
+
+// === 分组数据辅助函数(单 Blob 替代 N+1 次读取) ===
+
+// 获取全部分组及书签,自动从旧格式(groups_index + group_{id})迁移
+export async function getGroupsData(kv) {
+  if (!kv) return []
+  // 优先读取新格式(单 Blob)
+  const data = await kvGetJSON(kv, 'nav_groups', null)
+  if (data && Array.isArray(data.groups)) {
+    return data.groups
+  }
+
+  // 迁移:从旧格式读取
+  const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
+  if (!Array.isArray(groupsIndex) || groupsIndex.length === 0) {
+    return []
+  }
+
+  groupsIndex.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+
+  const groups = await Promise.all(
+    groupsIndex.map(async (g) => {
+      const d = await kvGetJSON(kv, `group_${g.id}`, { bookmarks: [] })
+      return {
+        id: g.id,
+        name: g.name,
+        sort: g.sort,
+        bookmarks: Array.isArray(d.bookmarks) ? d.bookmarks : []
+      }
+    })
+  )
+
+  // 写入新格式
+  await kvPutJSON(kv, 'nav_groups', { groups })
+  return groups
+}
+
+// 保存全部分组及书签(单 Blob 写入)
+export async function saveGroupsData(kv, groups) {
+  if (!kv) throw new Error('Blob 存储未就绪')
+  await kvPutJSON(kv, 'nav_groups', { groups })
+}

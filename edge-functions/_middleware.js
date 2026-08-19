@@ -1,7 +1,7 @@
 import { isAuthenticated, jsonResponse } from './_lib/kv.js'
 
 // 全局中间件:仅对 /api/* 进行鉴权,排除 login 与健康检查
-const PUBLIC_PATHS = ['/api/auth/login', '/api/health']
+const PUBLIC_PATHS = ['/api/auth/login', '/api/health', '/api/init']
 
 export async function onRequest(context) {
   const { request, env, next } = context

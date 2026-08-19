@@ -64,6 +64,14 @@ export interface GroupsResponse {
   groups: Group[]
 }
 
+export interface InitResponse {
+  loggedIn: boolean
+  reason: string | null
+  passwordSet: boolean
+  config: AppConfig | null
+  groups: Group[]
+}
+
 async function request<T = unknown>(
   url: string,
   options: RequestInit = {}
@@ -101,6 +109,9 @@ async function request<T = unknown>(
 }
 
 export const api = {
+  // 初始化(合并登录态 + 配置 + 分组,一次请求)
+  getInit: () => request<InitResponse>('/api/init'),
+
   // 鉴权
   checkLogin: () => request<{ loggedIn: boolean; reason: string | null; passwordSet: boolean }>('/api/auth/check'),
   login: (password: string) =>

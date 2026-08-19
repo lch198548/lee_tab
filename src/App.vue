@@ -35,12 +35,11 @@ import { onMounted, reactive, computed } from 'vue'
 import LoginPage from '@/components/LoginPage.vue'
 import NavPage from '@/components/NavPage.vue'
 import { useAppStore } from '@/stores/app'
-import { useAuth } from '@/composables/useAuth'
 import { useConfig } from '@/composables/useConfig'
+import { api } from '@/api'
 
 const { state, loggedIn, loading } = useAppStore()
-const { checkLogin } = useAuth()
-const { loadConfig, backgroundLayerStyle, backgroundBlurPx, backgroundMaskAlpha } = useConfig()
+const { backgroundLayerStyle, backgroundBlurPx, backgroundMaskAlpha, applyTheme } = useConfig()
 
 // 背景模糊样式(backdrop-filter + webkit 前缀)
 const blurStyle = computed(() => ({
@@ -62,13 +61,22 @@ function showToast(message: string, type: 'info' | 'error' | 'success' = 'info')
 ;(window as any).$toast = showToast
 
 onMounted(async () => {
-  await checkLogin()
-  if (state.loggedIn) {
-    try {
-      await loadConfig()
-    } catch (e) {
-      showToast((e as Error).message, 'error')
+  try {
+    // 一次请求获取登录态 + 配置 + 全部分组书签
+    const init = await api.getInit()
+    state.loggedIn = init.loggedIn
+    if (init.loggedIn && init.config) {
+      state.config = init.config
+      state.groups = init.groups
+      // 应用主题
+      if (init.config.theme) {
+        applyTheme(init.config.theme)
+      }
     }
+  } catch (e) {
+    state.loggedIn = false
+  } finally {
+    state.loading = false
   }
 
   // 监听未登录事件

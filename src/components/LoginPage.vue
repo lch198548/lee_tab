@@ -45,11 +45,10 @@
 import { ref } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useAuth } from '@/composables/useAuth'
-import { useConfig } from '@/composables/useConfig'
+import { api } from '@/api'
 
 const { state } = useAppStore()
 const { login } = useAuth()
-const { loadConfig } = useConfig()
 
 const password = ref('')
 const confirmPassword = ref('')
@@ -88,7 +87,10 @@ async function onSubmit() {
   try {
     const res = await login(password.value)
     firstSetup.value = res.firstSetup
-    await loadConfig()
+    // 登录成功后通过 init 接口加载配置和分组
+    const init = await api.getInit()
+    if (init.config) state.config = init.config
+    state.groups = init.groups
   } catch (e) {
     errorMsg.value = (e as Error).message
   } finally {

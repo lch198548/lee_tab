@@ -178,7 +178,6 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useAuth } from '@/composables/useAuth'
 import { useGroups } from '@/composables/useGroups'
-import { useConfig } from '@/composables/useConfig'
 import { useNotes } from '@/composables/useNotes'
 import { useTodos } from '@/composables/useTodos'
 import { useUI } from '@/composables/useUI'
@@ -190,8 +189,7 @@ const FAV_GROUP_NAME = '常用'
 
 const { state } = useAppStore()
 const { logout } = useAuth()
-const { loadGroups, createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort } = useGroups()
-const { loadConfig } = useConfig()
+const { createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort } = useGroups()
 const { notes, loadNotes, createNote: createNoteApi } = useNotes()
 const { loadTodos, createTodo: createTodoApi } = useTodos()
 const { loadUI } = useUI()
@@ -406,19 +404,6 @@ async function onCreateTodo(text: string) {
 }
 
 onMounted(async () => {
-  if (!state.config) {
-    try {
-      await loadConfig()
-    } catch (e) {
-      ;(window as any).$toast?.((e as Error).message, 'error')
-    }
-  }
-  try {
-    await loadGroups()
-    currentIndex.value = 0
-  } catch (e) {
-    ;(window as any).$toast?.((e as Error).message, 'error')
-  }
   loadNotes().catch(() => {})
   loadTodos().catch(() => {})
   loadUI().catch(() => {})

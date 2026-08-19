@@ -1,7 +1,7 @@
 import {
   getKV,
-  kvGetJSON,
-  kvPutJSON,
+  getGroupsData,
+  saveGroupsData,
   jsonResponse,
   errorResponse,
   parseJSONBody,
@@ -25,7 +25,8 @@ export async function onRequestPost({ request, env, params }) {
   const url = (body?.url || '').trim()
   if (!name || !url) return errorResponse('名称和 URL 不能为空', 400)
 
-  const group = await kvGetJSON(kv, `group_${id}`, null)
+  const groups = await getGroupsData(kv)
+  const group = groups.find((g) => g.id === id)
   if (!group) return errorResponse('分组不存在', 404)
 
   const bookmarks = Array.isArray(group.bookmarks) ? group.bookmarks : []
@@ -42,7 +43,8 @@ export async function onRequestPost({ request, env, params }) {
     favorite: !!body?.favorite
   })
 
-  await kvPutJSON(kv, `group_${id}`, { ...group, bookmarks })
+  group.bookmarks = bookmarks
+  await saveGroupsData(kv, groups)
   return jsonResponse({
     ok: true,
     bookmark: bookmarks[bookmarks.length - 1]
@@ -67,7 +69,8 @@ export async function onRequestPut({ request, env, params }) {
     return errorResponse('bookmarks 必须是数组', 400)
   }
 
-  const group = await kvGetJSON(kv, `group_${id}`, null)
+  const groups = await getGroupsData(kv)
+  const group = groups.find((g) => g.id === id)
   if (!group) return errorResponse('分组不存在', 404)
 
   // 重排 sort
@@ -83,6 +86,7 @@ export async function onRequestPut({ request, env, params }) {
     favorite: !!b.favorite
   }))
 
-  await kvPutJSON(kv, `group_${id}`, { ...group, bookmarks: cleaned })
+  group.bookmarks = cleaned
+  await saveGroupsData(kv, groups)
   return jsonResponse({ ok: true, bookmarks: cleaned })
 }
