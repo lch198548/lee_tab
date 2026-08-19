@@ -1,8 +1,8 @@
 // 图标 URL 工具:基于书签 URL 生成在线 favicon 服务地址
 
 const FAVICON_SERVICES = [
-  // 优先级:Google s2(稳定) -> OneAPI(国内备用) -> 直接站点 favicon
-  (domain: string) => `https://www.google.com/s2/favicons?sz=64&domain=${domain}`,
+  // 优先级:favicon.im(国内速度快) -> OneAPI(备用) -> 直接站点 favicon
+  (domain: string) => `https://a.favicon.im/${domain}`,
   (domain: string) => `https://favicon.cccyun.cc/${domain}`,
   (domain: string) => `https://${domain}/favicon.ico`
 ]

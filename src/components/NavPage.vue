@@ -398,6 +398,7 @@ async function onAddNote() {
 async function onCreateTodo(text: string) {
   try {
     await createTodoApi(text)
+    todoInputOpen.value = false
   } catch (e) {
     ;(window as any).$toast?.((e as Error).message, 'error')
   }
