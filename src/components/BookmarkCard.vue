@@ -213,8 +213,8 @@ async function onDelete() {
 }
 
 .name {
-  font-size: 14px;
-  color: var(--text-primary);
+  font-size: var(--bookmark-font-size, 14px);
+  color: var(--bookmark-text, var(--text-primary));
   text-align: center;
   width: 100%;
   white-space: nowrap;
@@ -279,7 +279,7 @@ async function onDelete() {
     font-size: 18px;
   }
   .name {
-    font-size: 12px;
+    font-size: calc(var(--bookmark-font-size, 14px) - 2px);
   }
 }
 </style>

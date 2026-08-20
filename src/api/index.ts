@@ -6,6 +6,61 @@ export interface Engine {
   url: string
 }
 
+// 配色主题:每个字段对应一个 CSS 变量,可自由自定义
+export interface ThemeConfig {
+  id: string
+  name: string
+  // 基础
+  bgPage: string
+  bgCard: string
+  bgCardHover: string
+  bgGlass: string
+  bgGlassStrong: string
+  bgModal: string
+  bgInput: string
+  textPrimary: string
+  textSecondary: string
+  textMuted: string
+  borderColor: string
+  borderStrong: string
+  accent: string
+  accentHover: string
+  danger: string
+  success: string
+  warning: string
+  // 搜索框
+  searchBg: string
+  searchText: string
+  searchPlaceholder: string
+  searchBtnBg: string
+  searchBtnIcon: string
+  // 搜索 tab
+  searchTabDefaultBg: string
+  searchTabActiveBg: string
+  searchTabText: string
+  searchTabActiveText: string
+  // 书签分组标签
+  groupTabDefaultBg: string
+  groupTabActiveBg: string
+  groupTabText: string
+  groupTabActiveText: string
+  // 书签文字(无图标时文字颜色 / 通用文字)
+  bookmarkText: string
+  bookmarkFontSize: number
+  // 顶部导航
+  topbarBg: string
+  topbarOpacity: number
+  // 图标
+  iconColor: string
+  iconSize: number
+  // 右侧分组切换
+  sidebarBg: string
+  sidebarDot: string
+  sidebarDotActive: string
+  sidebarArrow: string
+  sidebarText: string
+}
+
 export interface AppConfig {
   title: string
   background: { type: 'color' | 'gradient' | 'image' | 'video'; value: string }
@@ -14,6 +69,10 @@ export interface AppConfig {
   // 背景遮罩透明度(0-1),仅对 image/video 类型生效
   backgroundMask: number
   theme: 'dark' | 'light' | 'auto'
+  // 当前配色主题 id(内置或自定义)
+  themeId?: string
+  // 自定义主题列表(内置主题为代码内预设)
+  customThemes?: ThemeConfig[]
   defaultEngine: string
   engines: Engine[]
   openInNewTab: boolean

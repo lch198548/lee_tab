@@ -23,6 +23,39 @@
   --radius-sm: 8px;
   --radius-lg: 16px;
   --transition: 0.2s ease;
+
+  /* ===== 可自定义区域变量(由配色主题控制) ===== */
+  /* 搜索框 */
+  --search-bg: rgba(20, 25, 35, 0.75);
+  --search-text: #f3f4f6;
+  --search-placeholder: #6b7280;
+  --search-btn-bg: #60a5fa;
+  --search-btn-icon: #ffffff;
+  /* 搜索 tab */
+  --search-tab-default-bg: transparent;
+  --search-tab-active-bg: #60a5fa;
+  --search-tab-text: #9ca3af;
+  --search-tab-active-text: #ffffff;
+  /* 书签分组标签 */
+  --group-tab-default-bg: rgba(255, 255, 255, 0.06);
+  --group-tab-active-bg: #60a5fa;
+  --group-tab-text: #9ca3af;
+  --group-tab-active-text: #ffffff;
+  /* 书签文字 */
+  --bookmark-text: #f3f4f6;
+  --bookmark-font-size: 14px;
+  /* 顶部导航 */
+  --topbar-bg: rgba(20, 25, 35, 0.5);
+  --topbar-opacity: 0.5;
+  /* 图标 */
+  --icon-color: #9ca3af;
+  --icon-size: 17px;
+  /* 右侧分组切换 */
+  --sidebar-bg: rgba(20, 25, 35, 0.75);
+  --sidebar-dot: #6b7280;
+  --sidebar-dot-active: #60a5fa;
+  --sidebar-arrow: #9ca3af;
+  --sidebar-text: #f3f4f6;
 }
 
 [data-theme='light'] {

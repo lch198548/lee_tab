@@ -22,13 +22,34 @@
 
         <!-- 主题 -->
         <section class="form-section">
-          <h4>主题</h4>
+          <h4>明暗</h4>
           <div class="radio-row">
             <label v-for="t in themes" :key="t.value">
               <input v-model="form.theme" :value="t.value" type="radio" name="theme" />
               {{ t.label }}
             </label>
           </div>
+        </section>
+
+        <!-- 配色主题 -->
+        <section class="form-section">
+          <h4>配色主题</h4>
+          <div class="theme-pick-list">
+            <div
+              v-for="t in allThemes"
+              :key="t.id"
+              class="theme-pick"
+              :class="{ active: t.id === activeThemeId }"
+              @click="onPickTheme(t.id)"
+            >
+              <span class="theme-pick-swatch" :style="{ background: t.accent }"></span>
+              <span class="theme-pick-name">{{ t.name }}</span>
+              <span v-if="isBuiltinTheme(t.id)" class="theme-pick-badge">内置</span>
+            </div>
+          </div>
+          <button class="btn-small" @click="openThemeEditor">
+            <PaletteIcon /> 管理主题
+          </button>
         </section>
 
         <!-- 背景 -->
@@ -123,25 +144,57 @@
         </button>
       </footer>
     </div>
+
+    <!-- 主题管理子弹窗 -->
+    <div v-if="showThemeEditor" class="modal-mask theme-editor-mask" @click.self="showThemeEditor = false">
+      <div class="modal theme-editor-modal">
+        <header class="modal-header">
+          <h3>主题管理</h3>
+          <button class="icon-btn" @click="showThemeEditor = false"><CloseIcon /></button>
+        </header>
+        <div class="modal-body">
+          <ThemeEditor />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { api, type AppConfig } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
+import { BUILTIN_THEMES } from '@/theme/presets'
+import ThemeEditor from './ThemeEditor.vue'
 import {
   CloseIcon,
   TrashIcon,
   DownloadIcon,
-  UploadIcon
+  UploadIcon,
+  PaletteIcon
 } from './icons'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { state } = useAppStore()
-const { saveConfig, loadConfig } = useConfig()
+const { saveConfig, loadConfig, allThemes, currentTheme, selectTheme } = useConfig()
+
+const showThemeEditor = ref(false)
+const activeThemeId = computed(() => currentTheme.value.id)
+
+function isBuiltinTheme(id: string) {
+  return BUILTIN_THEMES.some((t) => t.id === id)
+}
+
+async function onPickTheme(id: string) {
+  if (id === activeThemeId.value) return
+  await selectTheme(id)
+}
+
+function openThemeEditor() {
+  showThemeEditor.value = true
+}
 
 const form = reactive<AppConfig>(JSON.parse(JSON.stringify(state.config || {
   title: '我的导航',
@@ -367,6 +420,65 @@ async function onImportFile(e: Event) {
   align-items: center;
   gap: 6px;
   cursor: pointer;
+}
+
+/* 配色主题选择 */
+.theme-pick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.theme-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 13px;
+  background: var(--bg-input);
+}
+
+.theme-pick:hover {
+  background: var(--bg-card-hover);
+}
+
+.theme-pick.active {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+.theme-pick-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.theme-pick-name {
+  white-space: nowrap;
+}
+
+.theme-pick-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+/* 主题管理子窗口 */
+.theme-editor-mask {
+  z-index: 1100;
+}
+
+.theme-editor-modal {
+  max-width: 560px;
 }
 
 .engines-list {

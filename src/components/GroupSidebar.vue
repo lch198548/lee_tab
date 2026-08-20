@@ -61,6 +61,10 @@ defineEmits<{
   gap: 10px;
   padding: 10px 8px;
   border-radius: 999px;
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid var(--border-color);
   box-shadow: var(--shadow-lg);
   max-height: 70vh;
 }
@@ -72,14 +76,14 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: var(--text-secondary);
-  background: var(--bg-card);
+  color: var(--sidebar-arrow);
+  background: transparent;
   flex-shrink: 0;
 }
 
 .nav-arrow:hover:not(:disabled) {
   background: var(--accent);
-  color: #fff;
+  color: var(--sidebar-text);
 }
 
 .nav-arrow:disabled {
@@ -127,29 +131,29 @@ defineEmits<{
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--sidebar-dot);
   transition: var(--transition);
 }
 
 .dot:hover {
-  border-color: var(--accent);
+  border-color: var(--sidebar-dot-active);
 }
 
 .dot:hover .dot-inner {
-  background: var(--accent);
+  background: var(--sidebar-dot-active);
 }
 
 .dot.active {
-  border-color: var(--accent);
+  border-color: var(--sidebar-dot-active);
   width: 14px;
   height: 14px;
 }
 
 .dot.active .dot-inner {
-  background: var(--accent);
+  background: var(--sidebar-dot-active);
   width: 8px;
   height: 8px;
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: 0 0 8px var(--sidebar-dot-active);
 }
 
 /* 悬浮显示分组名 */
@@ -164,7 +168,7 @@ defineEmits<{
   border-radius: 6px;
   background: var(--bg-glass-strong);
   backdrop-filter: blur(12px);
-  color: var(--text-primary);
+  color: var(--sidebar-text);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;

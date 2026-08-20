@@ -101,8 +101,8 @@ onMounted(() => {
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 13px;
-  color: var(--text-secondary);
-  background: transparent;
+  color: var(--search-tab-text);
+  background: var(--search-tab-default-bg);
   border: 1px solid transparent;
   transition: var(--transition);
   cursor: pointer;
@@ -115,9 +115,9 @@ onMounted(() => {
 }
 
 .engine-tab.active {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--search-tab-active-text);
+  background: var(--search-tab-active-bg);
+  border-color: var(--search-tab-active-bg);
 }
 
 .search-box {
@@ -128,6 +128,10 @@ onMounted(() => {
   border-radius: 999px;
   padding: 6px 6px 6px 24px;
   box-shadow: var(--shadow-lg);
+  background: var(--search-bg);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--border-strong);
 }
 
 .search-box input {
@@ -138,11 +142,11 @@ onMounted(() => {
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text-primary);
+  color: var(--search-text);
 }
 
 .search-box input::placeholder {
-  color: var(--text-muted);
+  color: var(--search-placeholder);
 }
 
 .search-btn {
@@ -152,8 +156,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
+  background: var(--search-btn-bg);
+  color: var(--search-btn-icon);
   flex-shrink: 0;
   cursor: pointer;
   transition: var(--transition);

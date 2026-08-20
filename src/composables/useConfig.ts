@@ -2,6 +2,13 @@ import { computed, watch } from 'vue'
 import { api } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { cacheConfig } from '@/utils/cache'
+import {
+  BUILTIN_THEMES,
+  DEFAULT_THEME_ID,
+  findTheme,
+  applyThemeConfig
+} from '@/theme/presets'
+import type { ThemeConfig } from '@/api'
 
 export function useConfig() {
   const { state } = useAppStore()
@@ -42,6 +49,12 @@ export function useConfig() {
       actual = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     }
     root.setAttribute('data-theme', actual)
+  }
+
+  // 应用配色主题(CSS 变量注入 :root)
+  function applyColorTheme(themeId?: string) {
+    const theme = findTheme(themeId ?? state.config?.themeId, state.config?.customThemes)
+    applyThemeConfig(theme)
   }
 
   // 背景层样式(图片/渐变/纯色),应用到一个独立的背景 div 上
@@ -96,12 +109,56 @@ export function useConfig() {
   // 兼容旧 App.vue 的 backgroundStyle(不再使用,返回空对象)
   const backgroundStyle = computed(() => ({}))
 
+  // 全部主题(内置 + 自定义)
+  const allThemes = computed<ThemeConfig[]>(() => [
+    ...BUILTIN_THEMES,
+    ...(state.config?.customThemes || [])
+  ])
+
+  // 当前主题
+  const currentTheme = computed<ThemeConfig>(() =>
+    findTheme(state.config?.themeId, state.config?.customThemes)
+  )
+
+  // 选中主题
+  async function selectTheme(themeId: string) {
+    await saveConfig({ themeId })
+    applyColorTheme(themeId)
+  }
+
+  // 添加主题(基于当前主题复制)
+  async function addTheme(theme?: ThemeConfig) {
+    const base = theme || currentTheme.value
+    const now = Date.now()
+    const t: ThemeConfig = { ...base, id: `custom-${now}`, name: `自定义主题 ${(state.config?.customThemes?.length || 0) + 1}` }
+    const list = [...(state.config?.customThemes || []), t]
+    await saveConfig({ customThemes: list })
+    return t
+  }
+
+  // 更新主题
+  async function updateTheme(theme: ThemeConfig) {
+    const list = (state.config?.customThemes || []).map((t) => (t.id === theme.id ? theme : t))
+    await saveConfig({ customThemes: list })
+    if (state.config?.themeId === theme.id) applyColorTheme(theme.id)
+  }
+
+  // 删除主题(内置主题不可删除)
+  async function deleteTheme(themeId: string) {
+    const list = (state.config?.customThemes || []).filter((t) => t.id !== themeId)
+    const next = state.config?.themeId === themeId ? DEFAULT_THEME_ID : state.config?.themeId
+    await saveConfig({ customThemes: list, themeId: next })
+    applyColorTheme(next)
+  }
+
   // 监听 config 变化,应用主题
   watch(
-    () => state.config?.theme,
-    (t) => {
-      if (t) applyTheme(t)
-    }
+    () => [state.config?.theme, state.config?.themeId, state.config?.customThemes],
+    () => {
+      if (state.config?.theme) applyTheme(state.config.theme)
+      applyColorTheme()
+    },
+    { immediate: true, deep: true }
   )
 
   // 监听系统主题(仅 auto 模式)
@@ -115,6 +172,13 @@ export function useConfig() {
     loadConfig,
     saveConfig,
     applyTheme,
+    applyColorTheme,
+    allThemes,
+    currentTheme,
+    selectTheme,
+    addTheme,
+    updateTheme,
+    deleteTheme,
     backgroundStyle,
     backgroundLayerStyle,
     isVideoBg,

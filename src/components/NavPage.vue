@@ -482,7 +482,7 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 4px;
   padding: 12px 24px;
-  background: var(--bg-glass);
+  background: var(--topbar-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-color);
@@ -505,7 +505,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  color: var(--icon-color);
 }
 
 .icon-btn:hover {
@@ -518,8 +518,8 @@ onMounted(async () => {
 }
 
 .icon-btn svg {
-  width: 17px;
-  height: 17px;
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 /* 主体内容 */
@@ -554,8 +554,8 @@ onMounted(async () => {
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 13px;
-  color: var(--text-secondary);
-  background: var(--bg-card);
+  color: var(--group-tab-text);
+  background: var(--group-tab-default-bg);
   border: 1px solid var(--border-color);
   cursor: grab;
   transition: var(--transition);
@@ -573,9 +573,9 @@ onMounted(async () => {
 }
 
 .group-tab.active {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--group-tab-active-text);
+  background: var(--group-tab-active-bg);
+  border-color: var(--group-tab-active-bg);
 }
 
 .group-tab.fav-tab {
@@ -712,8 +712,8 @@ onMounted(async () => {
     height: 30px;
   }
   .icon-btn svg {
-    width: 15px;
-    height: 15px;
+    width: calc(var(--icon-size, 17px) - 2px);
+    height: calc(var(--icon-size, 17px) - 2px);
   }
   .bookmark-grid {
     grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
@@ -722,6 +722,10 @@ onMounted(async () => {
   .group-tab {
     padding: 5px 12px;
     font-size: 12px;
+  }
+  .group-tab .fav-icon {
+    width: 10px;
+    height: 10px;
   }
   .btn-add-floating {
     right: 60px;
