@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useTodos } from '@/composables/useTodos'
 import { useUI } from '@/composables/useUI'
 import { CheckIcon, TrashIcon, PlusIcon } from './icons'
@@ -62,22 +62,51 @@ const tab = ref<'active' | 'done'>('active')
 const panelRef = ref<HTMLElement | null>(null)
 
 const PANEL_W = 300
-const DEFAULT_RIGHT_PAD = 16
+const PANEL_H = 400
+const TOOLBAR_H = 60
 
-// 使用 left 来定位; x<0 表示相对右边(用于初始默认位置)
-const panelStyle = computed(() => {
-  // 初始加载时 ui.todoPanelX 还是默认 -16(表示相对右边)
-  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1440
-  let leftPx: number
-  if (ui.todoPanelX < 0 && ui.todoPanelX > -9999) {
-    // 初始未拖动前: right = -todoPanelX
-    leftPx = viewportW - PANEL_W + ui.todoPanelX
-  } else {
-    leftPx = ui.todoPanelX
+// 视口尺寸(响应式,窗口变化时用于把面板拉回可视区)
+const viewportW = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
+const viewportH = ref(typeof window !== 'undefined' ? window.innerHeight : 900)
+
+function onViewportResize() {
+  if (typeof window === 'undefined') return
+  // 窗口大小变化后,把面板位置修正到当前浏览器视口内,保证始终可见
+  let l = ui.todoPanelX
+  if (l < 0 && l > -9999) {
+    // 初始负值表示相对右边
+    l = viewportW.value - PANEL_W + l
   }
+  viewportW.value = window.innerWidth
+  viewportH.value = window.innerHeight
+  l = Math.max(0, Math.min(viewportW.value - PANEL_W, l))
+  const t = Math.max(0, Math.min(viewportH.value - PANEL_H, ui.todoPanelY))
+  if (l !== ui.todoPanelX || t !== ui.todoPanelY) {
+    setPanelPos('todoPanelX', Math.round(l))
+    setPanelPos('todoPanelY', Math.round(t))
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onViewportResize)
+  onViewportResize() // 首次挂载即按当前窗口修正
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onViewportResize)
+})
+
+const panelStyle = computed(() => {
+  // 与便签一致:针对当前浏览器视口定位并限制在窗口内
+  let leftPx = ui.todoPanelX
+  if (leftPx < 0 && leftPx > -9999) {
+    leftPx = viewportW.value - PANEL_W + leftPx
+  }
+  leftPx = Math.max(0, Math.min(viewportW.value - PANEL_W, leftPx))
+  const topPx = Math.max(TOOLBAR_H, Math.min(viewportH.value - 40, ui.todoPanelY))
   return {
     left: `${leftPx}px`,
-    top: `${ui.todoPanelY}px`
+    top: `${topPx}px`
   }
 })
 
