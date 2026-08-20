@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useTodos } from '@/composables/useTodos'
 import { useUI } from '@/composables/useUI'
 import { CheckIcon, TrashIcon, PlusIcon } from './icons'
@@ -62,51 +62,18 @@ const tab = ref<'active' | 'done'>('active')
 const panelRef = ref<HTMLElement | null>(null)
 
 const PANEL_W = 300
-const PANEL_H = 400
-const TOOLBAR_H = 60
 
-// 视口尺寸(响应式,窗口变化时用于把面板拉回可视区)
-const viewportW = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
-const viewportH = ref(typeof window !== 'undefined' ? window.innerHeight : 900)
-
-function onViewportResize() {
-  if (typeof window === 'undefined') return
-  // 窗口大小变化后,把面板位置修正到当前浏览器视口内,保证始终可见
-  let l = ui.todoPanelX
-  if (l < 0 && l > -9999) {
-    // 初始负值表示相对右边
-    l = viewportW.value - PANEL_W + l
-  }
-  viewportW.value = window.innerWidth
-  viewportH.value = window.innerHeight
-  l = Math.max(0, Math.min(viewportW.value - PANEL_W, l))
-  const t = Math.max(0, Math.min(viewportH.value - PANEL_H, ui.todoPanelY))
-  if (l !== ui.todoPanelX || t !== ui.todoPanelY) {
-    setPanelPos('todoPanelX', Math.round(l))
-    setPanelPos('todoPanelY', Math.round(t))
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('resize', onViewportResize)
-  onViewportResize() // 首次挂载即按当前窗口修正
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onViewportResize)
-})
-
+// 与便签一致:直接使用保存的绝对坐标定位,不随窗口变化自动移动/保存
 const panelStyle = computed(() => {
-  // 与便签一致:针对当前浏览器视口定位并限制在窗口内
   let leftPx = ui.todoPanelX
+  // 初始默认值(负数)表示相对右边,仅用于首次未拖动时的默认位置
   if (leftPx < 0 && leftPx > -9999) {
-    leftPx = viewportW.value - PANEL_W + leftPx
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
+    leftPx = vw - PANEL_W + leftPx
   }
-  leftPx = Math.max(0, Math.min(viewportW.value - PANEL_W, leftPx))
-  const topPx = Math.max(TOOLBAR_H, Math.min(viewportH.value - 40, ui.todoPanelY))
   return {
     left: `${leftPx}px`,
-    top: `${topPx}px`
+    top: `${ui.todoPanelY}px`
   }
 })
 
@@ -151,14 +118,12 @@ function onStartDrag(e: MouseEvent) {
     if (!dragging) return
     const dx = ev.clientX - startX
     const dy = ev.clientY - startY
-    let newLeft = startLeft + dx
-    let newTop = startTop + dy
-    // 限制在窗口内
+    // 与便签一致:按当前浏览器视口限制,保持面板完整可见
     const w = window.innerWidth
     const h = window.innerHeight
-    newLeft = Math.max(-PANEL_W + 40, Math.min(w - 40, newLeft))
     const panelH = panelRef.value?.offsetHeight || 400
-    newTop = Math.max(0, Math.min(h - 40, newTop))
+    const newLeft = Math.max(0, Math.min(w - PANEL_W, startLeft + dx))
+    const newTop = Math.max(0, Math.min(h - panelH, startTop + dy))
     setPanelPos('todoPanelX', Math.round(newLeft))
     setPanelPos('todoPanelY', Math.round(newTop))
   }
