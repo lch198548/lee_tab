@@ -588,17 +588,6 @@ onMounted(async () => {
   border-color: var(--group-tab-active-bg);
 }
 
-.group-tab.fav-tab {
-  color: var(--warning);
-  border-color: var(--warning);
-}
-
-.group-tab.fav-tab.active {
-  color: #fff;
-  background: var(--warning);
-  border-color: var(--warning);
-}
-
 /* 书签拖动经过分组标签的高亮 */
 .group-tab.drop-target {
   outline: 2px solid var(--accent);
