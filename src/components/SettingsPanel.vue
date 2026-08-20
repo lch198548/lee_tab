@@ -178,6 +178,7 @@ function isBuiltinTheme(id: string) {
 
 async function onPickTheme(id: string) {
   if (id === activeThemeId.value) return
+  form.themeId = id
   await selectTheme(id)
 }
 
@@ -229,6 +230,8 @@ function addEngine() {
 async function onSave() {
   saving.value = true
   try {
+    // 确保当前选中的配色主题随表单一起保存(可能从主题管理弹窗切换)
+    form.themeId = activeThemeId.value
     await saveConfig(form as any)
     ;(window as any).$toast?.('设置已保存', 'success')
     emit('close')
