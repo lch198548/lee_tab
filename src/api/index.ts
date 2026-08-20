@@ -8,10 +8,10 @@ export interface Engine {
 
 export interface AppConfig {
   title: string
-  background: { type: 'color' | 'gradient' | 'image'; value: string }
-  // 背景图模糊值(px),仅对 image 类型生效
+  background: { type: 'color' | 'gradient' | 'image' | 'video'; value: string }
+  // 背景图/视频模糊值(px),仅对 image/video 类型生效
   backgroundBlur: number
-  // 背景遮罩透明度(0-1),仅对 image 类型生效
+  // 背景遮罩透明度(0-1),仅对 image/video 类型生效
   backgroundMask: number
   theme: 'dark' | 'light' | 'auto'
   defaultEngine: string

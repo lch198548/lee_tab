@@ -57,24 +57,37 @@ export function useConfig() {
         backgroundRepeat: 'no-repeat'
       }
     }
+    if (bg.type === 'video') {
+      // 视频由独立的 <video> 元素渲染,此层只提供底色
+      return { backgroundColor: '#000' }
+    }
     if (bg.type === 'gradient') {
       return { backgroundImage: bg.value }
     }
     return { backgroundColor: bg.value }
   })
 
-  // 背景模糊值(仅对图片背景生效)
+  // 是否为视频背景
+  const isVideoBg = computed(() => state.config?.background?.type === 'video')
+
+  // 视频背景 URL
+  const backgroundVideoSrc = computed(() => {
+    const bg = state.config?.background
+    return bg && bg.type === 'video' ? bg.value : ''
+  })
+
+  // 背景模糊值(对图片和视频背景生效)
   const backgroundBlurPx = computed(() => {
     const bg = state.config?.background
-    if (!bg || bg.type !== 'image') return 0
+    if (!bg || (bg.type !== 'image' && bg.type !== 'video')) return 0
     const v = Number((state.config as any)?.backgroundBlur)
     return Number.isFinite(v) && v > 0 ? v : 0
   })
 
-  // 背景遮罩透明度(仅对图片背景生效,0-1)
+  // 背景遮罩透明度(对图片和视频背景生效,0-1)
   const backgroundMaskAlpha = computed(() => {
     const bg = state.config?.background
-    if (!bg || bg.type !== 'image') return 0
+    if (!bg || (bg.type !== 'image' && bg.type !== 'video')) return 0
     const v = Number((state.config as any)?.backgroundMask)
     if (!Number.isFinite(v)) return 0.35
     return Math.max(0, Math.min(1, v))
@@ -104,6 +117,8 @@ export function useConfig() {
     applyTheme,
     backgroundStyle,
     backgroundLayerStyle,
+    isVideoBg,
+    backgroundVideoSrc,
     backgroundBlurPx,
     backgroundMaskAlpha
   }

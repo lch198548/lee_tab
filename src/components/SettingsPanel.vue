@@ -45,14 +45,14 @@
             <input v-model="form.background.value" type="color" />
           </label>
           <label class="form-row" v-else>
-            <span>{{ form.background.type === 'image' ? '图片 URL' : 'CSS 渐变' }}</span>
+            <span>{{ form.background.type === 'image' ? '图片 URL' : form.background.type === 'video' ? '视频 URL' : 'CSS 渐变' }}</span>
             <textarea v-model="form.background.value" rows="2"
-              :placeholder="form.background.type === 'image' ? 'https://...' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'">
+              :placeholder="form.background.type === 'image' ? 'https://...jpg' : form.background.type === 'video' ? 'https://...mp4' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'">
             </textarea>
           </label>
 
-          <!-- 背景图专属:模糊值 + 遮罩透明度 -->
-          <template v-if="form.background.type === 'image'">
+          <!-- 背景图/视频专属:模糊值 + 遮罩透明度 -->
+          <template v-if="form.background.type === 'image' || form.background.type === 'video'">
             <label class="form-row">
               <span>背景模糊 ({{ form.backgroundBlur || 0 }}px)</span>
               <input
@@ -180,7 +180,8 @@ const themes = [
 const bgTypes = [
   { value: 'color' as const, label: '纯色' },
   { value: 'gradient' as const, label: '渐变' },
-  { value: 'image' as const, label: '图片' }
+  { value: 'image' as const, label: '图片' },
+  { value: 'video' as const, label: '视频' }
 ]
 
 const saving = ref(false)

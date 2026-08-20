@@ -2,6 +2,17 @@
   <div class="app-root">
     <!-- 背景层: 支持模糊和遮罩 -->
     <div class="bg-layer" :style="backgroundLayerStyle"></div>
+    <!-- 视频壁纸 -->
+    <video
+      v-if="isVideoBg && backgroundVideoSrc"
+      class="bg-video"
+      :src="backgroundVideoSrc"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+    ></video>
     <div
       v-if="backgroundMaskAlpha > 0"
       class="bg-mask"
@@ -39,7 +50,7 @@ import { useConfig } from '@/composables/useConfig'
 import { api } from '@/api'
 
 const { state, loggedIn, loading } = useAppStore()
-const { backgroundLayerStyle, backgroundBlurPx, backgroundMaskAlpha, applyTheme } = useConfig()
+const { backgroundLayerStyle, isVideoBg, backgroundVideoSrc, backgroundBlurPx, backgroundMaskAlpha, applyTheme } = useConfig()
 
 // 背景模糊样式(backdrop-filter + webkit 前缀)
 const blurStyle = computed(() => ({
@@ -101,6 +112,17 @@ onMounted(async () => {
   inset: 0;
   z-index: 0;
   background-color: var(--bg-page);
+}
+
+/* 视频壁纸 */
+.bg-video {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 .bg-mask {
