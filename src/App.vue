@@ -50,7 +50,7 @@ import { useConfig } from '@/composables/useConfig'
 import { api } from '@/api'
 
 const { state, loggedIn, loading } = useAppStore()
-const { backgroundLayerStyle, isVideoBg, backgroundVideoSrc, backgroundBlurPx, backgroundMaskAlpha, applyTheme } = useConfig()
+const { backgroundLayerStyle, isVideoBg, backgroundVideoSrc, backgroundBlurPx, backgroundMaskAlpha } = useConfig()
 
 // 背景模糊样式(backdrop-filter + webkit 前缀)
 const blurStyle = computed(() => ({
@@ -79,10 +79,6 @@ onMounted(async () => {
     if (init.loggedIn && init.config) {
       state.config = init.config
       state.groups = init.groups
-      // 应用主题
-      if (init.config.theme) {
-        applyTheme(init.config.theme)
-      }
     }
   } catch (e) {
     state.loggedIn = false

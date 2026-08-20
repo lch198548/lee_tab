@@ -73,7 +73,6 @@ export interface AppConfig {
   backgroundBlur: number
   // 背景遮罩透明度(0-1),仅对 image/video 类型生效
   backgroundMask: number
-  theme: 'dark' | 'light' | 'auto'
   // 当前配色主题 id(内置或自定义)
   themeId?: string
   // 自定义主题列表(内置主题为代码内预设)

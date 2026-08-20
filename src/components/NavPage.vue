@@ -482,14 +482,24 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 4px;
   padding: 12px 24px;
-  background: var(--topbar-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 100;
   flex-shrink: 0;
+  isolation: isolate;
+}
+
+/* 背景层独立应用透明度,不影响子元素 */
+.topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--topbar-bg);
+  opacity: var(--topbar-opacity);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .actions {

@@ -41,16 +41,6 @@ export function useConfig() {
     cacheConfig.set(merged)
   }
 
-  // 应用主题到 <html>
-  function applyTheme(theme: 'dark' | 'light' | 'auto') {
-    const root = document.documentElement
-    let actual = theme
-    if (theme === 'auto') {
-      actual = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    }
-    root.setAttribute('data-theme', actual)
-  }
-
   // 应用配色主题(CSS 变量注入 :root)
   function applyColorTheme(themeId?: string) {
     const theme = findTheme(themeId ?? state.config?.themeId, state.config?.customThemes)
@@ -151,27 +141,18 @@ export function useConfig() {
     applyColorTheme(next)
   }
 
-  // 监听 config 变化,应用主题
+  // 监听配置变化,应用配色主题
   watch(
-    () => [state.config?.theme, state.config?.themeId, state.config?.customThemes],
+    () => [state.config?.themeId, state.config?.customThemes],
     () => {
-      if (state.config?.theme) applyTheme(state.config.theme)
       applyColorTheme()
     },
     { immediate: true, deep: true }
   )
 
-  // 监听系统主题(仅 auto 模式)
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (state.config?.theme === 'auto') applyTheme('auto')
-    })
-  }
-
   return {
     loadConfig,
     saveConfig,
-    applyTheme,
     applyColorTheme,
     allThemes,
     currentTheme,

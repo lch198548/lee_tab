@@ -20,17 +20,6 @@
           </label>
         </section>
 
-        <!-- 主题 -->
-        <section class="form-section">
-          <h4>明暗</h4>
-          <div class="radio-row">
-            <label v-for="t in themes" :key="t.value">
-              <input v-model="form.theme" :value="t.value" type="radio" name="theme" />
-              {{ t.label }}
-            </label>
-          </div>
-        </section>
-
         <!-- 配色主题 -->
         <section class="form-section">
           <h4>配色主题</h4>
@@ -201,7 +190,6 @@ const form = reactive<AppConfig>(JSON.parse(JSON.stringify(state.config || {
   background: { type: 'color', value: '#1f2937' },
   backgroundBlur: 0,
   backgroundMask: 0.35,
-  theme: 'dark',
   defaultEngine: 'baidu',
   engines: [],
   openInNewTab: true
@@ -225,11 +213,6 @@ watch(
   }
 )
 
-const themes = [
-  { value: 'dark' as const, label: '深色' },
-  { value: 'light' as const, label: '浅色' },
-  { value: 'auto' as const, label: '跟随系统' }
-]
 const bgTypes = [
   { value: 'color' as const, label: '纯色' },
   { value: 'gradient' as const, label: '渐变' },

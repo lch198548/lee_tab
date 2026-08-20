@@ -97,7 +97,7 @@ const DEFAULTS: Omit<ThemeConfig, 'id' | 'name'> = {
   timeFontSize: 64,
   dateColor: '#9ca3af',
   dateFontSize: 15,
-  topbarBg: 'rgba(20,25,35,0.5)',
+  topbarBg: '#141923',
   topbarOpacity: 0.5,
   iconColor: '#9ca3af',
   iconSize: 17,
@@ -151,7 +151,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#9aa7bd',
     dateFontSize: 15,
-    topbarBg: 'rgba(18,24,38,0.55)',
+    topbarBg: '#121826',
     topbarOpacity: 0.55,
     iconColor: '#9aa7bd',
     iconSize: 17,
@@ -196,7 +196,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#7dd3fc',
     dateFontSize: 15,
-    topbarBg: 'rgba(4,20,44,0.5)',
+    topbarBg: '#04142c',
     topbarOpacity: 0.5,
     iconColor: '#7dd3fc',
     iconSize: 17,
@@ -241,7 +241,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#6ee7b7',
     dateFontSize: 15,
-    topbarBg: 'rgba(9,32,22,0.5)',
+    topbarBg: '#092016',
     topbarOpacity: 0.5,
     iconColor: '#6ee7b7',
     iconSize: 17,
@@ -286,7 +286,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#fdba74',
     dateFontSize: 15,
-    topbarBg: 'rgba(38,20,12,0.5)',
+    topbarBg: '#26140c',
     topbarOpacity: 0.5,
     iconColor: '#fdba74',
     iconSize: 17,
@@ -331,7 +331,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#c4b5fd',
     dateFontSize: 15,
-    topbarBg: 'rgba(26,14,46,0.5)',
+    topbarBg: '#1a0e2e',
     topbarOpacity: 0.5,
     iconColor: '#c4b5fd',
     iconSize: 17,
@@ -376,7 +376,7 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     timeFontSize: 64,
     dateColor: '#64748b',
     dateFontSize: 15,
-    topbarBg: 'rgba(255,255,255,0.6)',
+    topbarBg: '#ffffff',
     topbarOpacity: 0.6,
     iconColor: '#475569',
     iconSize: 17,
@@ -399,12 +399,21 @@ export function findTheme(
   return all.find((t) => t.id === themeId) || BUILTIN_THEMES.find((t) => t.id === DEFAULT_THEME_ID)!
 }
 
+// 数字字段对应的 CSS 单位(未列出的如 topbarOpacity 为无单位数值)
+const THEME_UNITS: Partial<Record<keyof Omit<ThemeConfig, 'id' | 'name'>, string>> = {
+  bookmarkFontSize: 'px',
+  timeFontSize: 'px',
+  dateFontSize: 'px',
+  iconSize: 'px'
+}
+
 // 把主题配置应用到 :root 的 CSS 变量上
 export function applyThemeConfig(theme: ThemeConfig) {
   const root = document.documentElement
   for (const key of Object.keys(THEME_VARS) as Array<keyof Omit<ThemeConfig, 'id' | 'name'>>) {
     const v = (theme as unknown as Record<string, unknown>)[key]
     if (v === undefined) continue
-    root.style.setProperty(THEME_VARS[key], String(v))
+    const unit = THEME_UNITS[key] || ''
+    root.style.setProperty(THEME_VARS[key], `${v}${unit}`)
   }
 }
