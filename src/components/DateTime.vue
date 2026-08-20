@@ -53,25 +53,26 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  color: var(--text-primary);
+  color: var(--time-color);
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
   user-select: none;
 }
 
 .time {
-  font-size: 64px;
+  font-size: var(--time-font-size);
   font-weight: 200;
   line-height: 1;
   letter-spacing: 2px;
   font-variant-numeric: tabular-nums;
+  color: var(--time-color);
 }
 
 .date {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
-  color: var(--text-secondary);
+  font-size: var(--date-font-size);
+  color: var(--date-color);
   font-weight: 400;
 }
 
@@ -81,10 +82,10 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .time {
-    font-size: 44px;
+    font-size: calc(var(--time-font-size) * 0.7);
   }
   .date {
-    font-size: 13px;
+    font-size: calc(var(--date-font-size) * 0.87);
   }
 }
 </style>

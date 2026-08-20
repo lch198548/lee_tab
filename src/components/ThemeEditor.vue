@@ -219,6 +219,15 @@ const sections: SectionDef[] = [
     ]
   },
   {
+    title: '时间日期',
+    fields: [
+      { key: 'timeColor', label: '时间颜色', type: 'color' },
+      { key: 'timeFontSize', label: '时间大小', type: 'number', min: 24, max: 96, step: 1 },
+      { key: 'dateColor', label: '日期颜色', type: 'color' },
+      { key: 'dateFontSize', label: '日期大小', type: 'number', min: 10, max: 28, step: 1 }
+    ]
+  },
+  {
     title: '顶部导航',
     fields: [
       { key: 'topbarBg', label: '导航背景', type: 'color' },

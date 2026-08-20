@@ -44,6 +44,11 @@
   /* 书签文字 */
   --bookmark-text: #f3f4f6;
   --bookmark-font-size: 14px;
+  /* 时间日期 */
+  --time-color: #f3f4f6;
+  --time-font-size: 64px;
+  --date-color: #9ca3af;
+  --date-font-size: 15px;
   /* 顶部导航 */
   --topbar-bg: rgba(20, 25, 35, 0.5);
   --topbar-opacity: 0.5;

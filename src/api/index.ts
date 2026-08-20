@@ -47,6 +47,11 @@ export interface ThemeConfig {
   // 书签文字(无图标时文字颜色 / 通用文字)
   bookmarkText: string
   bookmarkFontSize: number
+  // 时间日期
+  timeColor: string
+  timeFontSize: number
+  dateColor: string
+  dateFontSize: number
   // 顶部导航
   topbarBg: string
   topbarOpacity: number
