@@ -46,8 +46,11 @@
           <template #item="{ element, index }">
             <button
               class="group-tab"
-              :class="{ active: index === currentIndex, 'fav-tab': element.id === FAV_GROUP_ID }"
+              :class="{ active: index === currentIndex, 'fav-tab': element.id === FAV_GROUP_ID, 'drop-target': dropTargetId === element.id }"
               @click="switchTo(index)"
+              @dragover="onTagDragOver"
+              @dragleave.prevent="onTagDragLeave"
+              @drop.prevent="onTagDrop($event, element)"
               :title="element.id === FAV_GROUP_ID ? '常用书签(来自所有分组)' : element.name"
             >
               <StarFilledIcon v-if="element.id === FAV_GROUP_ID" class="fav-icon" />
@@ -189,7 +192,7 @@ const FAV_GROUP_NAME = '常用'
 
 const { state } = useAppStore()
 const { logout } = useAuth()
-const { createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort } = useGroups()
+const { createGroup, renameGroup, deleteGroup, saveBookmarks, saveGroupSort, moveBookmarkToGroup } = useGroups()
 const { notes, loadNotes, createNote: createNoteApi } = useNotes()
 const { loadTodos, createTodo: createTodoApi } = useTodos()
 const { loadUI } = useUI()
@@ -314,6 +317,53 @@ function canMoveGroup(evt: any) {
     return false
   }
   return true
+}
+
+// === 书签拖到顶部分组标签 => 移动/设为常用 ===
+const dropTargetId = ref('')
+
+function onTagDragOver(e: DragEvent) {
+  // 仅当拖动的是书签时才允许放置,避免干扰分组本身的拖拽排序
+  if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('application/x-bookmark-move')) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onTagDragLeave(e: DragEvent) {
+  dropTargetId.value = ''
+}
+
+async function onTagDrop(e: DragEvent, targetGroup: Group) {
+  dropTargetId.value = ''
+  if (!e.dataTransfer) return
+  const raw = e.dataTransfer.getData('application/x-bookmark-move')
+  if (!raw) return
+  let data: { bookmarkId: string; groupId: string }
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    return
+  }
+  const { bookmarkId, groupId } = data
+  if (!bookmarkId || !groupId || groupId === targetGroup.id) return
+
+  try {
+    if (targetGroup.id === FAV_GROUP_ID) {
+      // 拖到「常用」=> 设为常用(仍在原分组)
+      const g = state.groups.find((x) => x.id === groupId)
+      const b = g?.bookmarks.find((x) => x.id === bookmarkId)
+      if (!g || !b) return
+      b.favorite = true
+      await saveBookmarks(groupId, g.bookmarks)
+      ;(window as any).$toast?.('已设为常用', 'success')
+    } else {
+      await moveBookmarkToGroup(groupId, bookmarkId, targetGroup.id)
+      ;(window as any).$toast?.(`已移动到「${targetGroup.name}」`, 'success')
+    }
+  } catch (err) {
+    ;(window as any).$toast?.((err as Error).message, 'error')
+  }
 }
 
 // 书签排序变更
@@ -537,6 +587,13 @@ onMounted(async () => {
   color: #fff;
   background: var(--warning);
   border-color: var(--warning);
+}
+
+/* 书签拖动经过分组标签的高亮 */
+.group-tab.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  transform: scale(1.05);
 }
 
 .fav-icon {

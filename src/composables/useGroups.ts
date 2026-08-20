@@ -82,6 +82,26 @@ export function useGroups() {
     cacheGroups.set(state.groups)
   }
 
+  // 跨分组移动书签(从源分组移除并追加到目标分组),两次保存保证原子性
+  async function moveBookmarkToGroup(fromGroupId: string, bookmarkId: string, toGroupId: string) {
+    if (!fromGroupId || !toGroupId || fromGroupId === toGroupId) return
+    const fromG = state.groups.find((x) => x.id === fromGroupId)
+    const toG = state.groups.find((x) => x.id === toGroupId)
+    if (!fromG || !toG) return
+
+    const idx = fromG.bookmarks.findIndex((b) => b.id === bookmarkId)
+    if (idx === -1) return
+    const bm = fromG.bookmarks.splice(idx, 1)
+    if (bm.length === 0) return
+
+    const moved = { ...bm[0], favorite: false, sort: toG.bookmarks.length }
+    toG.bookmarks.push(moved)
+
+    // 先保存目标分组(新增),再保存源分组(移除),顺序无关但逐次更新 state 保持正确
+    await saveBookmarks(toGroupId, toG.bookmarks)
+    await saveBookmarks(fromGroupId, fromG.bookmarks)
+  }
+
   return {
     loadGroups,
     createGroup,
@@ -90,6 +110,7 @@ export function useGroups() {
     reorderGroups,
     saveGroupSort,
     addBookmark,
-    saveBookmarks
+    saveBookmarks,
+    moveBookmarkToGroup
   }
 }

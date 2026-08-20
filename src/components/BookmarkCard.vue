@@ -1,5 +1,11 @@
 <template>
-  <div class="bookmark-card" :class="{ favorite: bookmark.favorite }">
+  <div
+    class="bookmark-card"
+    :class="{ favorite: bookmark.favorite }"
+    draggable="true"
+    @dragstart="onDragStart"
+    @dragend="onDragEnd"
+  >
     <a
       :href="bookmark.url"
       class="card-link"
@@ -75,6 +81,27 @@ function onIconError() {
   } else {
     loadFailed.value = true
   }
+}
+
+// 跨分组拖动:记录源分组和书签 id,供顶部分组标签 drop 时移动
+const dragging = ref(false)
+function onDragStart(e: DragEvent) {
+  // 点击操作按钮时禁止启动拖拽(与 vuedraggable filter 保持一致)
+  if ((e.target as HTMLElement)?.closest?.('.card-actions')) {
+    e.preventDefault()
+    return
+  }
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData(
+    'application/x-bookmark-move',
+    JSON.stringify({ bookmarkId: props.bookmark.id, groupId: props.groupId })
+  )
+  dragging.value = true
+}
+
+function onDragEnd() {
+  dragging.value = false
 }
 
 function onClick() {
