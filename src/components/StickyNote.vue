@@ -77,14 +77,19 @@ watch(() => props.note.content, (v) => {
   if (!editing.value) editContent.value = v
 })
 
-const noteStyle = computed(() => ({
-  left: `${props.note.x}px`,
-  top: `${props.note.y}px`,
-  width: `${props.note.width}px`,
-  height: `${props.note.height}px`,
-  backgroundColor: props.note.bgColor,
-  color: props.note.textColor
-}))
+const noteStyle = computed(() => {
+  const w = props.note.width || 220
+  const h = props.note.height || 200
+  // 百分比定位:left/top 用百分比,配合 min() 确保不超出右/下边界,max(0%) 防止超出左/上
+  return {
+    left: `max(0%, min(${props.note.x}%, calc(100vw - ${w}px)))`,
+    top: `max(0%, min(${props.note.y}%, calc(100vh - ${h}px)))`,
+    width: `${w}px`,
+    height: `${h}px`,
+    backgroundColor: props.note.bgColor,
+    color: props.note.textColor
+  }
+})
 
 function toggleEdit() {
   editing.value = !editing.value
@@ -123,10 +128,11 @@ function onStartDrag(e: MouseEvent) {
     if (!dragging) return
     const dx = ev.clientX - startX
     const dy = ev.clientY - startY
-    let newX = noteStartX + dx
-    let newY = noteStartY + dy
-    newX = Math.max(0, Math.min(window.innerWidth - props.note.width, newX))
-    newY = Math.max(0, Math.min(window.innerHeight - props.note.height, newY))
+    const w = window.innerWidth
+    const h = window.innerHeight
+    // 换算成百分比增量,clamp 0-100 保证不出界
+    const newX = Math.min(100, Math.max(0, noteStartX + (dx / w) * 100))
+    const newY = Math.min(100, Math.max(0, noteStartY + (dy / h) * 100))
     props.note.x = newX
     props.note.y = newY
   }

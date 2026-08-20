@@ -63,17 +63,14 @@ const panelRef = ref<HTMLElement | null>(null)
 
 const PANEL_W = 300
 
-// 与便签一致:直接使用保存的绝对坐标定位,不随窗口变化自动移动/保存
+// 百分比定位:left/top 用百分比,配合 min() 确保面板不会超出视口右/下边界;
+// max(0%) 防止负值导致面板超出左/上边界 -> 无论窗口多大多小内容都可见
 const panelStyle = computed(() => {
-  let leftPx = ui.todoPanelX
-  // 初始默认值(负数)表示相对右边,仅用于首次未拖动时的默认位置
-  if (leftPx < 0 && leftPx > -9999) {
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
-    leftPx = vw - PANEL_W + leftPx
-  }
+  const x = typeof ui.todoPanelX === 'number' ? ui.todoPanelX : 68
+  const y = typeof ui.todoPanelY === 'number' ? ui.todoPanelY : 12
   return {
-    left: `${leftPx}px`,
-    top: `${ui.todoPanelY}px`
+    left: `max(0%, min(${x}%, calc(100vw - ${PANEL_W}px)))`,
+    top: `max(0%, min(${y}%, calc(100vh - 10px)))`
   }
 })
 
@@ -118,14 +115,15 @@ function onStartDrag(e: MouseEvent) {
     if (!dragging) return
     const dx = ev.clientX - startX
     const dy = ev.clientY - startY
-    // 与便签一致:按当前浏览器视口限制,保持面板完整可见
     const w = window.innerWidth
     const h = window.innerHeight
     const panelH = panelRef.value?.offsetHeight || 400
+    // 像素位置限制在视口内,保证面板始终可见
     const newLeft = Math.max(0, Math.min(w - PANEL_W, startLeft + dx))
     const newTop = Math.max(0, Math.min(h - panelH, startTop + dy))
-    setPanelPos('todoPanelX', Math.round(newLeft))
-    setPanelPos('todoPanelY', Math.round(newTop))
+    // 换算成百分比(0-100)保存,窗口缩放时位置按比例跟随
+    setPanelPos('todoPanelX', Math.round((newLeft / w) * 1000) / 10)
+    setPanelPos('todoPanelY', Math.round((newTop / h) * 1000) / 10)
   }
 
   const onUp = () => {
