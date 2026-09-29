@@ -26,7 +26,6 @@
               ref="gridRef"
               class="fav-grid"
               @dragstart.prevent
-              @contextmenu.prevent="onFavContextMenu"
             >
               <!-- 拖拽时的落点预览(虚线框,只做提示不挤动其他卡片) -->
               <div v-if="preview" class="fav-preview" :style="previewStyle"></div>
@@ -131,17 +130,6 @@
 
     <!-- 底部每日一言(点击换一句) -->
     <QuoteBar />
-
-    <!-- 常用页空白处右键菜单:重置布局 -->
-    <Teleport to="body">
-      <div v-if="favMenu" class="fav-ctx-mask" @click="favMenu = null" @contextmenu.prevent="favMenu = null">
-        <div class="fav-ctx-menu" :style="{ left: favMenu.x + 'px', top: favMenu.y + 'px' }">
-          <button class="fav-ctx-item" @click="onResetFavLayout">
-            <LayoutIcon /> 重置常用页布局
-          </button>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -168,7 +156,7 @@ import HotModal from './HotModal.vue'
 import RateModal from './RateModal.vue'
 import CalendarModal from './CalendarModal.vue'
 import WeatherModal from './WeatherModal.vue'
-import { PlusIcon, LayoutIcon } from './icons'
+import { PlusIcon } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useGroups } from '@/composables/useGroups'
 import { useNotes } from '@/composables/useNotes'
@@ -602,7 +590,6 @@ function onWheel(e: WheelEvent) {
     target?.closest?.('.modal') ||
     target?.closest?.('.group-sidebar') ||
     target?.closest?.('.bookmark-grid') ||
-    target?.closest?.('.fav-grid') ||
     target?.closest?.('.search-box') ||
     target?.closest?.('.drawer')
   ) {
@@ -649,24 +636,6 @@ function onAddBookmark() {
     return
   }
   ;(window as any).$openBookmarkEditor?.(g.id, null)
-}
-
-// === 常用页右键菜单:重置布局 ===
-const favMenu = ref<{ x: number; y: number } | null>(null)
-
-function onFavContextMenu(e: MouseEvent) {
-  // 书签卡片有自己的右键菜单,不拦截;磁贴和空白处弹出重置布局菜单
-  if ((e.target as HTMLElement)?.closest?.('.fav-cell .bookmark-card')) return
-  favMenu.value = {
-    x: Math.min(e.clientX, window.innerWidth - 190 - 8),
-    y: Math.min(e.clientY, window.innerHeight - 50 - 8)
-  }
-}
-
-async function onResetFavLayout() {
-  favMenu.value = null
-  setFavLayout([])
-  ;(window as any).$toast?.('常用页布局已重置', 'success')
 }
 
 onMounted(async () => {
@@ -872,61 +841,6 @@ async function autoCloudBackup() {
 .drag-ghost {
   opacity: 0.4;
   background: var(--accent) !important;
-}
-
-/* 常用页右键菜单(重置布局) */
-.fav-ctx-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-}
-
-.fav-ctx-menu {
-  position: fixed;
-  min-width: 180px;
-  padding: 5px;
-  border-radius: 10px;
-  background: var(--bg-glass-strong);
-  backdrop-filter: blur(32px) saturate(1.7);
-  -webkit-backdrop-filter: blur(32px) saturate(1.7);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  animation: favCtxIn 0.12s var(--ease);
-}
-
-@keyframes favCtxIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.fav-ctx-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  transition: 0.12s ease;
-}
-
-.fav-ctx-item:hover {
-  background: var(--bg-card-hover);
-}
-
-.fav-ctx-item svg {
-  width: 14px;
-  height: 14px;
 }
 
 .drag-chosen {
