@@ -6,7 +6,7 @@
 
 import type { Component } from 'vue'
 import type { AppConfig } from '@/api'
-import { ClipboardIcon, ExchangeIcon, FlameIcon, NoteIcon } from '@/components/icons'
+import { CalendarIcon, ClipboardIcon, CloudSunIcon, ExchangeIcon, FlameIcon, NoteIcon } from '@/components/icons'
 
 export interface PluginMeta {
   id: string
@@ -27,6 +27,18 @@ export const PLUGINS: PluginMeta[] = [
     name: '记事本',
     desc: '常用页记事本小组件与全屏管理弹窗',
     icon: NoteIcon
+  },
+  {
+    id: 'calendar',
+    name: '日历·农历',
+    desc: '常用页迷你日历磁贴,点开查看整月农历/节气/节日',
+    icon: CalendarIcon
+  },
+  {
+    id: 'weather',
+    name: '天气',
+    desc: '常用页迷你天气磁贴,点开查看七天预报与换城市',
+    icon: CloudSunIcon
   },
   {
     id: 'hot',

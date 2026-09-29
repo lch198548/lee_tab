@@ -171,7 +171,7 @@
 
         <!-- 备份 -->
         <section class="form-section" v-show="activeTab === 'backup'">
-          <h4>备份</h4>
+          <h4>本地备份</h4>
           <div class="backup-row">
             <button class="btn-small" @click="onExport">
               <DownloadIcon /> 导出 JSON
@@ -180,6 +180,71 @@
               <UploadIcon /> 导入 JSON
               <input type="file" accept="application/json" @change="onImportFile" hidden />
             </label>
+          </div>
+
+          <h4 class="cloud-title">云盘备份 · 中科院数据胶囊</h4>
+          <label class="form-row">
+            <span>S3 端点</span>
+            <input v-model="cloud.endpoint" type="text" placeholder="https://s3.cstcloud.cn" />
+          </label>
+          <label class="form-row">
+            <span>Bucket</span>
+            <input v-model="cloud.bucket" type="text" placeholder="数据胶囊分配的 Bucket ID" />
+          </label>
+          <label class="form-row">
+            <span>Access Key</span>
+            <input v-model="cloud.ak" type="text" placeholder="AWS Access Key ID" />
+          </label>
+          <label class="form-row">
+            <span>Secret Key</span>
+            <input
+              v-model="cloud.sk"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="cloud.skSet ? '已保存(' + cloud.skMask + '),留空保持不变' : 'AWS Secret Access Key'"
+            />
+          </label>
+          <label class="form-row">
+            <span>目录前缀</span>
+            <input v-model="cloud.prefix" type="text" placeholder="personal-tab/" />
+          </label>
+          <label class="form-row">
+            <span>User-Agent</span>
+            <input v-model="cloud.ua" type="text" placeholder="rclone/v1.66.0" />
+          </label>
+          <div class="form-row">
+            <span>每日自动备份</span>
+            <button
+              type="button"
+              class="switch"
+              :class="{ on: cloud.auto }"
+              :title="cloud.auto ? '点击关闭' : '点击开启(距上次备份超过 24 小时才执行)'"
+              @click="cloud.auto = !cloud.auto"
+            >
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+          <div class="backup-row">
+            <button class="btn-small" :disabled="cloudBusy" @click="saveCloud">保存配置</button>
+            <button class="btn-small" :disabled="cloudBusy" @click="testCloud">测试连接</button>
+            <button class="btn-small" :disabled="cloudBusy" @click="runCloudBackup">立即备份</button>
+          </div>
+          <p v-if="cloudStatus" class="cloud-status" :class="{ err: cloudErr }">{{ cloudStatus }}</p>
+          <p class="cloud-last">
+            上次备份:{{
+              cloud.lastBackupAt ? new Date(cloud.lastBackupAt).toLocaleString('zh-CN', { hour12: false }) : '从未'
+            }}
+          </p>
+          <div v-if="cloudBackups.length" class="cloud-list">
+            <div class="cloud-list-head">
+              <span>云端备份(最多保留 {{ cloud.keep || 30 }} 份)</span>
+              <button class="btn-mini" :disabled="cloudBusy" @click="refreshCloudList">刷新</button>
+            </div>
+            <div v-for="b in cloudBackups" :key="b.key" class="cloud-row">
+              <span class="cloud-name">{{ fmtBackupName(b.key) }}</span>
+              <span class="cloud-size">{{ fmtSize(b.size) }}</span>
+              <button class="btn-mini" :disabled="cloudBusy" @click="restoreCloudBackup(b)">恢复</button>
+            </div>
           </div>
         </section>
 
@@ -219,7 +284,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { api, type AppConfig, type WallpaperItem } from '@/api'
+import { api, type AppConfig, type WallpaperItem, type CloudConfigInfo, type CloudBackupInfo } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
 import {
@@ -264,7 +329,153 @@ function onEscKey(e: KeyboardEvent) {
   emit('close')
 }
 
-onMounted(() => window.addEventListener('keydown', onEscKey))
+onMounted(() => {
+  window.addEventListener('keydown', onEscKey)
+  loadCloud()
+})
+
+// === 云盘备份(数据胶囊 S3) ===
+const cloud = reactive<Partial<CloudConfigInfo>>({
+  endpoint: 'https://s3.cstcloud.cn',
+  region: 'us-east-1',
+  bucket: '',
+  ak: '',
+  sk: '',
+  skSet: false,
+  skMask: '',
+  ua: 'rclone/v1.66.0',
+  prefix: 'personal-tab/',
+  auto: false,
+  keep: 30,
+  lastBackupAt: 0
+})
+const cloudBusy = ref(false)
+const cloudStatus = ref('')
+const cloudErr = ref(false)
+const cloudBackups = ref<CloudBackupInfo[]>([])
+
+function cloudMsg(text: string, isErr = false) {
+  cloudStatus.value = text
+  cloudErr.value = isErr
+}
+
+async function loadCloud() {
+  try {
+    const cfg = await api.getCloudConfig()
+    Object.assign(cloud, cfg, { sk: '' })
+  } catch {
+    /* 未配置时静默,表单留默认值 */
+  }
+}
+
+async function saveCloud() {
+  cloudBusy.value = true
+  cloudMsg('保存中…')
+  try {
+    const cfg = await api.saveCloudConfig({
+      endpoint: cloud.endpoint,
+      region: cloud.region,
+      bucket: cloud.bucket,
+      ak: cloud.ak,
+      sk: cloud.sk,
+      ua: cloud.ua,
+      prefix: cloud.prefix,
+      auto: cloud.auto
+    })
+    Object.assign(cloud, cfg, { sk: '' })
+    cloudMsg('配置已保存')
+  } catch (e) {
+    cloudMsg(e instanceof Error ? e.message : '保存失败', true)
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function testCloud() {
+  cloudBusy.value = true
+  cloudMsg('连接测试中…')
+  try {
+    const r = await api.cloudAction('test')
+    cloudMsg(r.ok ? r.message || '连接成功' : r.error || '连接失败', !r.ok)
+  } catch (e) {
+    cloudMsg(e instanceof Error ? e.message : '连接失败', true)
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function runCloudBackup() {
+  cloudBusy.value = true
+  cloudMsg('正在备份到数据胶囊…')
+  try {
+    const r = await api.cloudAction('run')
+    if (r.ok) {
+      cloud.lastBackupAt = r.lastBackupAt || Date.now()
+      if (r.backups) cloudBackups.value = r.backups
+      cloudMsg(`备份成功:${r.count} 个数据项,${fmtSize(r.size || 0)}`)
+    } else {
+      cloudMsg(r.error || '备份失败', true)
+    }
+  } catch (e) {
+    cloudMsg(e instanceof Error ? e.message : '备份失败', true)
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function refreshCloudList() {
+  cloudBusy.value = true
+  try {
+    const r = await api.cloudAction('list')
+    if (r.ok && r.backups) {
+      cloudBackups.value = r.backups
+      cloudMsg('')
+    } else {
+      cloudMsg(r.error || '获取备份列表失败', true)
+    }
+  } catch (e) {
+    cloudMsg(e instanceof Error ? e.message : '获取备份列表失败', true)
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function restoreCloudBackup(b: CloudBackupInfo) {
+  const ok = await dialogConfirm({
+    title: '恢复云备份',
+    message: `将用云端备份 ${fmtBackupName(b.key)} 覆盖当前全部线上数据(分组/书签/待办/笔记/设置),确定恢复?`,
+    confirmText: '恢复'
+  })
+  if (!ok) return
+  cloudBusy.value = true
+  cloudMsg('恢复中…')
+  try {
+    const r = await api.cloudAction('restore', { key: b.key })
+    if (r.ok) {
+      cloudMsg(`已恢复 ${r.count} 个数据项,页面即将刷新…`)
+      setTimeout(() => window.location.reload(), 1200)
+    } else {
+      cloudMsg(r.error || '恢复失败', true)
+    }
+  } catch (e) {
+    cloudMsg(e instanceof Error ? e.message : '恢复失败', true)
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+// 'personal-tab/backup-20260929-151200.json' -> '2026-09-29 15:12:00'
+function fmtBackupName(key: string): string {
+  const m = key.match(/backup-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.json$/)
+  if (!m) return key
+  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`
+}
+
+function fmtSize(n: number): string {
+  if (n < 1024) return n + ' B'
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+  return (n / 1024 / 1024).toFixed(2) + ' MB'
+}
 onUnmounted(() => {
   window.removeEventListener('keydown', onEscKey)
   // 关闭抽屉前把 600ms 防抖中未落盘的改动立即保存,防止丢配置
@@ -581,6 +792,7 @@ async function onImportFile(e: Event) {
 }
 
 .form-row input[type='text'],
+.form-row input[type='password'],
 .form-row select,
 .form-row textarea {
   flex: 1;
@@ -688,6 +900,83 @@ async function onImportFile(e: Event) {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* 云盘备份 */
+.cloud-title {
+  margin-top: 22px;
+}
+
+.cloud-status {
+  font-size: 12.5px;
+  color: var(--success);
+  margin: 8px 0 4px;
+}
+
+.cloud-status.err {
+  color: var(--danger);
+}
+
+.cloud-last {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.cloud-list {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cloud-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+
+.cloud-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cloud-name {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.cloud-size {
+  color: var(--text-muted);
+  width: 64px;
+  text-align: right;
+}
+
+.btn-mini {
+  font-size: 11.5px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  transition: 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-mini:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.btn-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* === 插件开关 === */

@@ -11,7 +11,13 @@
     <template #icon><FlameIcon /></template>
 
     <!-- 正面:默认源 Top 6 -->
-    <div v-if="items.length" class="hw-list">
+    <div v-if="loading && !items.length" class="hw-skeleton" aria-hidden="true">
+      <div v-for="(w, n) in SK_W" :key="n" class="hw-sk-row">
+        <span class="hw-sk-rank"></span>
+        <span class="hw-sk-title" :style="{ width: w + '%' }"></span>
+      </div>
+    </div>
+    <div v-else-if="items.length" class="hw-list">
       <a
         v-for="(it, i) in items"
         :key="i"
@@ -26,7 +32,6 @@
         <span class="hw-title">{{ it.title }}</span>
       </a>
     </div>
-    <div v-else-if="loading" class="hw-empty">正在获取热榜…</div>
     <div v-else class="hw-empty">
       <p class="hw-empty-title">热榜暂时拉取不到</p>
       <p class="hw-empty-sub">点击磁贴切换数据源</p>
@@ -65,6 +70,9 @@ const sourceName = computed(() => props.sources.find((s) => s.id === sourceId.va
 const items = ref<HotItem[]>([])
 const loading = ref(false)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+// 骨架屏行宽(%,固定伪随机)
+const SK_W = [82, 64, 91, 73, 56, 88]
 
 // 背面:其他源的第 1 条(最多 3 个源)
 const headlines = ref<Array<{ label: string; title: string }>>([])
@@ -181,6 +189,49 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 加载骨架屏(白系 shimmer,贴合磁贴渐变底) */
+.hw-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.hw-sk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 31px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+@keyframes hwShimmer {
+  from {
+    background-position: -160px 0;
+  }
+  to {
+    background-position: 160px 0;
+  }
+}
+
+.hw-sk-rank,
+.hw-sk-title {
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.24) 40%, rgba(255, 255, 255, 0.1) 55%);
+  background-size: 320px 100%;
+  animation: hwShimmer 1.1s linear infinite;
+  flex-shrink: 0;
+}
+
+.hw-sk-rank {
+  width: 18px;
+}
+
+.hw-sk-title {
+  flex-shrink: 1;
 }
 
 /* 空态 */

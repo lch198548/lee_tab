@@ -123,6 +123,15 @@
     <!-- 汇率换算弹窗 -->
     <RateModal v-if="rateOpen" @close="rateOpen = false" />
 
+    <!-- 日历·农历弹窗 -->
+    <CalendarModal v-if="calOpen" @close="calOpen = false" />
+
+    <!-- 天气弹窗 -->
+    <WeatherModal v-if="weatherOpen" @close="weatherOpen = false" />
+
+    <!-- 底部每日一言(点击换一句) -->
+    <QuoteBar />
+
     <!-- 常用页空白处右键菜单:重置布局 -->
     <Teleport to="body">
       <div v-if="favMenu" class="fav-ctx-mask" @click="favMenu = null" @contextmenu.prevent="favMenu = null">
@@ -150,10 +159,15 @@ import TodoWidget from './TodoWidget.vue'
 import NotesWidget from './NotesWidget.vue'
 import HotWidget from './HotWidget.vue'
 import RateWidget from './RateWidget.vue'
+import CalendarWidget from './CalendarWidget.vue'
+import WeatherWidget from './WeatherWidget.vue'
+import QuoteBar from './QuoteBar.vue'
 import NotesModal from './NotesModal.vue'
 import TodoModal from './TodoModal.vue'
 import HotModal from './HotModal.vue'
 import RateModal from './RateModal.vue'
+import CalendarModal from './CalendarModal.vue'
+import WeatherModal from './WeatherModal.vue'
 import { PlusIcon, LayoutIcon } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useGroups } from '@/composables/useGroups'
@@ -161,7 +175,7 @@ import { useNotes } from '@/composables/useNotes'
 import { useTodos } from '@/composables/useTodos'
 import { useUI } from '@/composables/useUI'
 import { PLUGINS, isPluginOn } from '@/plugins'
-import { HOT_SOURCES } from '@/api'
+import { api, HOT_SOURCES } from '@/api'
 import type { Bookmark, Group } from '@/api'
 
 // 虚拟分组ID:代表"常用"
@@ -179,12 +193,16 @@ const todoOpen = ref(false)
 const notesOpen = ref(false)
 const hotOpen = ref(false)
 const rateOpen = ref(false)
+const calOpen = ref(false)
+const weatherOpen = ref(false)
 
 // 小组件点击打开对应管理弹窗
 function onWidgetOpen(id: string) {
   if (id === 'todo') todoOpen.value = true
   else if (id === 'hot') hotOpen.value = true
   else if (id === 'rate') rateOpen.value = true
+  else if (id === 'calendar') calOpen.value = true
+  else if (id === 'weather') weatherOpen.value = true
   else notesOpen.value = true
 }
 
@@ -257,7 +275,9 @@ const WIDGET_COMPONENTS: Record<string, Component> = {
   todo: TodoWidget,
   notepad: NotesWidget,
   hot: HotWidget,
-  rate: RateWidget
+  rate: RateWidget,
+  calendar: CalendarWidget,
+  weather: WeatherWidget
 }
 
 // 尺寸规格注册表(单位 = 网格单元,书签固定 1x1)
@@ -266,7 +286,9 @@ const WIDGET_SPECS: Record<string, { w: number; h: number }> = {
   todo: { w: 3, h: 2 },
   notepad: { w: 3, h: 2 },
   hot: { w: 4, h: 2 },
-  rate: { w: 3, h: 2 }
+  rate: { w: 3, h: 2 },
+  calendar: { w: 1, h: 1 },
+  weather: { w: 1, h: 1 }
 }
 
 // 网格几何(需与 CSS 保持一致)
@@ -573,7 +595,7 @@ let wheelAccum = 0
 const WHEEL_THRESHOLD = 80
 function onWheel(e: WheelEvent) {
   // 任一弹窗/抽屉打开时不切换分组(Teleport 弹窗不在 .modal 选择器覆盖内,统一用状态守卫)
-  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || editor.open) return
+  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || calOpen.value || weatherOpen.value || editor.open) return
   const target = e.target as HTMLElement
   if (
     target?.closest?.('.card-actions') ||
@@ -604,7 +626,7 @@ function onWheel(e: WheelEvent) {
 function onKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || editor.open) return
+  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || calOpen.value || weatherOpen.value || editor.open) return
   if (e.key === 'ArrowLeft') switchTo(currentIndex.value - 1)
   else if (e.key === 'ArrowRight') switchTo(currentIndex.value + 1)
 }
@@ -651,6 +673,7 @@ onMounted(async () => {
   loadNotes().catch(() => {})
   loadTodos().catch(() => {})
   loadUI().catch(() => {})
+  autoCloudBackup().catch(() => {})
   window.addEventListener('keydown', onKeydown)
   // 加载完成后自动聚焦搜索框
   nextTick(() => {
@@ -658,6 +681,18 @@ onMounted(async () => {
     if (input) input.focus()
   })
 })
+
+// 每日自动云备份:开启且距上次备份超过 24h 时静默执行,失败不打扰用户
+async function autoCloudBackup() {
+  try {
+    const cfg = await api.getCloudConfig()
+    if (!cfg.auto || !cfg.bucket || !cfg.ak) return
+    if (cfg.lastBackupAt && Date.now() - cfg.lastBackupAt < 24 * 3600 * 1000) return
+    await api.cloudAction('run')
+  } catch {
+    /* 静默失败 */
+  }
+}
 </script>
 
 <style scoped>

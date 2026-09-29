@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@edgeone/pages-blob": "^0.0.14",
+    "lunar-javascript": "^1.7.7",
+    "solarlunar": "^3.1.0",
     "vue": "^3.4.21",
     "vuedraggable": "^4.1.0"
   },

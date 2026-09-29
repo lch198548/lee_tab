@@ -78,6 +78,69 @@ export interface HotItem {
   hot: number | null
 }
 
+export interface WeatherInfo {
+  city: string
+  admin: string
+  current: {
+    temp: number
+    feels: number
+    text: string
+    icon: string
+    humidity: number
+    wind: number
+    pressure: number | null // 地表气压 hPa
+    rain: number | null // 当前降水 mm
+  }
+  hourly: Array<{
+    time: string // ISO '2026-09-29T13:00'
+    temp: number
+    text: string
+    icon: string
+    pop: number | null // 降水概率 %
+    isDay: boolean
+  }>
+  daily: WeatherDay[]
+  updated: string
+}
+
+export interface WeatherDay {
+  date: string // YYYY-MM-DD
+  text: string
+  icon: string
+  max: number
+  min: number
+  sunrise: string // ISO '2026-09-29T06:12'
+  sunset: string
+  pop: number | null // 降水概率 %
+  windMax: number | null // 最大风速 km/h
+  uv: number | null // 紫外线指数
+}
+
+// 法定节假日 + 调休(holiday-cn 开源数据集,国务院公告口径)
+export interface HolidayDay {
+  date: string // YYYY-MM-DD
+  name: string // 假期名(调休补班日 name 带"调休"字样)
+  off: boolean // true = 休息 / false = 补班
+}
+
+export interface HolidayYear {
+  year: number
+  days: HolidayDay[]
+}
+
+// 天气图标 key -> emoji(免 SVG 图标集的轻量方案)
+export const WEATHER_EMOJI: Record<string, string> = {
+  sun: '☀️',
+  partly: '🌤️',
+  cloud: '☁️',
+  fog: '🌫️',
+  drizzle: '🌦️',
+  rain: '🌧️',
+  snow: '🌨️',
+  showers: '🌦️',
+  thunder: '⛈️'
+}
+
 // 热榜源元数据(与后端 /api/hot 支持的 source 一致)
 export interface HotSourceMeta {
   id: string
@@ -295,6 +358,14 @@ export const api = {
   // 实时汇率(以 CNY 为基准,服务端代理 + 1h 缓存)
   getRates: () => request<RateInfo>('/api/rate'),
 
+  // 天气(Open-Meteo 服务端代理 + 30min 缓存)
+  getWeather: (city: string) =>
+    request<WeatherInfo>(`/api/weather?city=${encodeURIComponent(city)}`),
+
+  // 法定节假日+调休(holiday-cn 数据,服务端代理 + 24h 缓存)
+  getHoliday: (year: number) =>
+    request<HolidayYear>(`/api/holiday?year=${year}`),
+
   // UI 状态(面板位置等)
   getUIState: () => request<Record<string, unknown>>('/api/ui'),
   saveUIState: (state: Record<string, unknown>) =>
@@ -316,5 +387,50 @@ export const api = {
     request<{ ok: boolean; count: number }>('/api/backup', {
       method: 'POST',
       body: json
+    }),
+
+  // === 云盘备份(中科院数据胶囊 S3) ===
+  getCloudConfig: () => request<CloudConfigInfo>('/api/cloud'),
+  saveCloudConfig: (cfg: Partial<CloudConfigInfo>) =>
+    request<CloudConfigInfo>('/api/cloud', { method: 'PUT', body: JSON.stringify(cfg) }),
+  // action: test(连通测试) | run(立即备份) | list(备份列表) | restore(恢复,key=对象名)
+  cloudAction: (action: 'test' | 'run' | 'list' | 'restore', params?: Record<string, unknown>) =>
+    request<CloudActionResult>('/api/cloud', {
+      method: 'POST',
+      body: JSON.stringify({ action, ...params })
     })
+}
+
+// 云备份配置(SK 永远脱敏,传空串表示保持原值)
+export interface CloudConfigInfo {
+  endpoint: string
+  region: string
+  bucket: string
+  ak: string
+  sk?: string
+  skSet?: boolean
+  skMask?: string
+  ua: string
+  prefix: string
+  auto: boolean
+  keep: number
+  lastBackupAt: number
+}
+
+export interface CloudBackupInfo {
+  key: string
+  size: number
+  lastModified: string
+}
+
+export interface CloudActionResult {
+  ok: boolean
+  error?: string
+  message?: string
+  key?: string
+  size?: number
+  count?: number
+  lastBackupAt?: number
+  exportedAt?: string
+  backups?: CloudBackupInfo[]
 }

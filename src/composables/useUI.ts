@@ -18,6 +18,8 @@ export interface UIState {
   favLayout: FavLayoutItem[]
   // 热榜插件:默认展示的热榜源 id(见后端 /api/hot 支持的源)
   hotSource: string
+  // 天气插件:城市名(后端 geocoding 模糊匹配)
+  weatherCity: string
 }
 
 // 待办面板近似宽度,用于旧像素坐标换算
@@ -28,7 +30,8 @@ const defaults: UIState = {
   todoPanelY: 12,   // 距顶 12%
   favWidgetOrder: ['todo', 'notepad'],
   favLayout: [],
-  hotSource: 'zhihu'
+  hotSource: 'zhihu',
+  weatherCity: '北京'
 }
 
 const state = reactive<UIState>({ ...defaults })
@@ -99,6 +102,12 @@ export function useUI() {
     saveUI()
   }
 
+  // 保存天气城市
+  function setWeatherCity(city: string) {
+    state.weatherCity = city
+    saveUI()
+  }
+
   return {
     ui: state,
     loadUI,
@@ -106,6 +115,7 @@ export function useUI() {
     setPanelPos,
     setFavWidgetOrder,
     setFavLayout,
-    setHotSource
+    setHotSource,
+    setWeatherCity
   }
 }

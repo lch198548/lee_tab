@@ -20,7 +20,15 @@
         </div>
 
         <div class="hm-body">
-          <div v-if="items.length" class="hm-list">
+          <!-- 加载骨架屏 -->
+          <div v-if="loading" class="hm-skeleton" aria-hidden="true">
+            <div v-for="(w, n) in SK_W" :key="n" class="hm-sk-row">
+              <span class="hm-sk-rank"></span>
+              <span class="hm-sk-title" :style="{ width: w + '%' }"></span>
+              <span class="hm-sk-hot"></span>
+            </div>
+          </div>
+          <div v-else-if="items.length" class="hm-list">
             <a
               v-for="(it, i) in items"
               :key="i"
@@ -35,7 +43,6 @@
               <span v-if="fmtHot(it.hot)" class="hm-hot">{{ fmtHot(it.hot) }}</span>
             </a>
           </div>
-          <div v-else-if="loading" class="hm-empty">正在获取{{ activeName }}热榜…</div>
           <div v-else class="hm-empty">{{ errMsg || '暂无数据' }}</div>
         </div>
 
@@ -66,7 +73,11 @@ const loading = ref(false)
 const errMsg = ref('')
 const updated = ref('')
 
-const activeName = computed(() => HOT_SOURCES.find((s) => s.id === active.value)?.name || '')
+// 骨架屏行宽(%,伪随机但固定,避免每次渲染跳动)
+const SK_W = [82, 64, 91, 73, 56, 88, 69, 47]
+
+// 客户端按源缓存:切换回看过的源立即显示(后台仍静默刷新)
+const cache = new Map<string, { items: HotItem[]; updated: string }>()
 
 // 热度格式化:12345 -> "1.2万";过小不显示
 function fmtHot(v: number | null): string {
@@ -85,15 +96,29 @@ const updatedText = computed(() => {
 })
 
 async function refresh() {
-  loading.value = items.value.length === 0
   errMsg.value = ''
+  // 命中缓存立即渲染,无缓存才显示骨架屏(避免切源时旧列表挂着像没反应)
+  const cached = cache.get(active.value)
+  if (cached) {
+    items.value = cached.items
+    updated.value = cached.updated
+    loading.value = false
+  } else {
+    items.value = []
+    updated.value = ''
+    loading.value = true
+  }
   try {
     const res = await api.getHot(active.value)
     items.value = res.items || []
     updated.value = res.updated || ''
+    cache.set(active.value, { items: items.value, updated: updated.value })
   } catch (e) {
-    items.value = []
-    errMsg.value = e instanceof Error ? e.message : '获取失败'
+    // 失败:有缓存保留缓存,无缓存才提示错误
+    if (!cached) {
+      items.value = []
+      errMsg.value = e instanceof Error ? e.message : '获取失败'
+    }
   } finally {
     loading.value = false
   }
@@ -302,6 +327,52 @@ onUnmounted(() => window.removeEventListener('keydown', onEscKey))
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* 加载骨架屏(shimmer) */
+.hm-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.hm-sk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+@keyframes hmShimmer {
+  from {
+    background-position: -160px 0;
+  }
+  to {
+    background-position: 160px 0;
+  }
+}
+
+.hm-sk-rank,
+.hm-sk-title,
+.hm-sk-hot {
+  height: 20px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--border-color) 40%, var(--bg-card) 55%);
+  background-size: 320px 100%;
+  animation: hmShimmer 1.1s linear infinite;
+  flex-shrink: 0;
+}
+
+.hm-sk-rank {
+  width: 20px;
+}
+
+.hm-sk-title {
+  flex-shrink: 1;
+}
+
+.hm-sk-hot {
+  width: 42px;
+  margin-left: auto;
 }
 
 .hm-footer {

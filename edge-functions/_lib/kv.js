@@ -34,6 +34,21 @@ export function getKV(_env) {
     },
     async delete(key) {
       await store.delete(key)
+    },
+    async list(options = {}) {
+      // 枚举键(分页循环,防御性解析 SDK 返回结构)
+      const prefix = options.prefix || ''
+      const out = []
+      let cursor
+      for (let i = 0; i < 50; i++) {
+        const resp = await store.list({ prefix, cursor })
+        const blobs = (resp && (resp.blobs || resp.keys)) || []
+        for (const b of blobs) out.push(typeof b === 'string' ? { key: b } : { key: b.key })
+        if (!resp || resp.complete !== false) break
+        cursor = resp.cursor || resp.nextCursor
+        if (!cursor) break
+      }
+      return out
     }
   }
 }

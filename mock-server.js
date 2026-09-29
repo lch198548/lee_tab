@@ -114,7 +114,27 @@ function imageBytes(res, buf, contentType) {
 // 二进制缓存(图标/壁纸,内存版,重启清空)
 const imgCache = new Map()
 const hotCache = new Map() // 热榜缓存: source -> {items, updated, t}
+const weatherCache = new Map() // 天气缓存: city -> {data, t}
+const holidayCache = new Map() // 节假日缓存: year -> {year, days, t}
 let rateCache = null // 汇率缓存: {rates, updated, date, base, t}
+
+// WMO weather code -> [中文文案, 图标 key]
+function wmoCode(code) {
+  const m = {
+    0: ['晴', 'sun'], 1: ['晴', 'sun'], 2: ['多云', 'partly'], 3: ['阴', 'cloud'],
+    45: ['雾', 'fog'], 48: ['雾凇', 'fog'],
+    51: ['毛毛雨', 'drizzle'], 53: ['毛毛雨', 'drizzle'], 55: ['毛毛雨', 'drizzle'],
+    56: ['冻雨', 'rain'], 57: ['冻雨', 'rain'],
+    61: ['小雨', 'rain'], 63: ['中雨', 'rain'], 65: ['大雨', 'rain'],
+    66: ['冻雨', 'rain'], 67: ['冻雨', 'rain'],
+    71: ['小雪', 'snow'], 73: ['中雪', 'snow'], 75: ['大雪', 'snow'], 77: ['雪粒', 'snow'],
+    80: ['阵雨', 'showers'], 81: ['阵雨', 'showers'], 82: ['强阵雨', 'showers'],
+    85: ['阵雪', 'snow'], 86: ['阵雪', 'snow'],
+    95: ['雷阵雨', 'thunder'], 96: ['雷雨冰雹', 'thunder'], 99: ['雷雨冰雹', 'thunder']
+  }
+  const hit = m[code] || ['未知', 'cloud']
+  return { text: hit[0], icon: hit[1] }
+}
 
 // 必应图库元数据缓存(12 小时);扩展为最近 30 天(分页 idx=0/8/16/24)
 let bingMeta = null
@@ -233,6 +253,211 @@ const DEFAULT_CONFIG = {
     { id: 'github', name: 'GitHub', url: 'https://github.com/search?q=' }
   ],
   openInNewTab: true
+}
+
+// === 数据胶囊 S3 客户端(SigV4,Web Crypto;与 edge-functions/_lib/s3.js 同源) ===
+const S3_EMPTY_SHA = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+
+function s3ToHex(buf) {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function s3Sha256Hex(data) {
+  const buf = typeof data === 'string' ? new TextEncoder().encode(data) : data
+  return s3ToHex(await crypto.subtle.digest('SHA-256', buf))
+}
+
+async function s3Hmac(keyData, msg) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    typeof keyData === 'string' ? new TextEncoder().encode(keyData) : keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg))
+  return new Uint8Array(sig)
+}
+
+function amzEncode(str, encodeSlash = true) {
+  let out = ''
+  for (const ch of str) {
+    if (/[A-Za-z0-9\-._~]/.test(ch)) {
+      out += ch
+    } else if (ch === '/') {
+      out += encodeSlash ? '%2F' : '/'
+    } else {
+      const bytes = new TextEncoder().encode(ch)
+      for (const b of bytes) out += '%' + b.toString(16).toUpperCase().padStart(2, '0')
+    }
+  }
+  return out
+}
+
+// 对象键路径编码:斜杠保留,仅编码段内字符
+function encodeKeyPath(key) {
+  return key.split('/').map((s) => amzEncode(s)).join('/')
+}
+
+function s3AmzDate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return (
+    d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+    'T' + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + 'Z'
+  )
+}
+
+async function s3Request(cfg, opts = {}) {
+  const { endpoint, region, bucket, ak, sk, ua } = cfg
+  const method = (opts.method || 'GET').toUpperCase()
+  const key = (opts.key || '').replace(/^\/+/, '')
+  const tries = opts.tries || 3
+  const host = endpoint.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+  const canonicalUri = '/' + bucket + (key ? '/' + encodeKeyPath(key) : '')
+  const query = opts.query || {}
+  const canonicalQuery = Object.keys(query)
+    .sort()
+    .map((k) => amzEncode(k) + '=' + amzEncode(String(query[k])))
+    .join('&')
+  const body = opts.body != null ? String(opts.body) : ''
+  const payloadHash = body ? await s3Sha256Hex(body) : S3_EMPTY_SHA
+  const url = `${endpoint}/${bucket}${key ? '/' + encodeKeyPath(key) : ''}` +
+    (canonicalQuery ? '?' + canonicalQuery : '')
+
+  let lastErr = null
+  for (let i = 0; i < tries; i++) {
+    const now = new Date()
+    const xAmzDate = s3AmzDate(now)
+    const dateStamp = xAmzDate.slice(0, 8)
+    const signedHeaders = 'host;x-amz-content-sha256;x-amz-date'
+    const canonicalHeaders =
+      `host:${host}\n` +
+      `x-amz-content-sha256:${payloadHash}\n` +
+      `x-amz-date:${xAmzDate}\n`
+    const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, payloadHash].join('\n')
+    const scope = `${dateStamp}/${region}/s3/aws4_request`
+    const stringToSign = ['AWS4-HMAC-SHA256', xAmzDate, scope, await s3Sha256Hex(canonicalRequest)].join('\n')
+    const kDate = await s3Hmac('AWS4' + sk, dateStamp)
+    const kRegion = await s3Hmac(kDate, region)
+    const kService = await s3Hmac(kRegion, 's3')
+    const kSigning = await s3Hmac(kService, 'aws4_request')
+    const signature = s3ToHex(await s3Hmac(kSigning, stringToSign))
+
+    const headers = {
+      Host: host,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': xAmzDate,
+      Authorization:
+        `AWS4-HMAC-SHA256 Credential=${ak}/${scope}, ` +
+        `SignedHeaders=${signedHeaders}, Signature=${signature}`
+    }
+    if (ua) headers['User-Agent'] = ua
+    if (body) {
+      headers['Content-Type'] = opts.contentType || 'application/json; charset=utf-8'
+      headers['Content-Length'] = String(new TextEncoder().encode(body).length)
+    }
+
+    try {
+      const res = await fetch(url, { method, headers, body: body || undefined })
+      const text = await res.text()
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`S3 ${res.status}: ${text.slice(0, 200)}`)
+        if (i < tries - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1) * (i + 1)))
+        continue
+      }
+      return { ok: res.ok, status: res.status, text }
+    } catch (e) {
+      lastErr = e
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1) * (i + 1)))
+    }
+  }
+  return { ok: false, status: 0, text: 'S3 请求失败: ' + (lastErr ? lastErr.message : String(lastErr)) }
+}
+
+function parseListXml(xml) {
+  const out = []
+  const re = /<Contents>([\s\S]*?)<\/Contents>/g
+  let m
+  while ((m = re.exec(xml))) {
+    const block = m[1]
+    const pick = (tag) => {
+      const t = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
+      return t ? t[1] : ''
+    }
+    out.push({ key: pick('Key'), size: Number(pick('Size')) || 0, lastModified: pick('LastModified') })
+  }
+  return { objects: out }
+}
+
+// === 云备份共享逻辑 ===
+const CLOUD_CONFIG_KEY = 'cloud_backup'
+const CLOUD_DEFAULTS = {
+  endpoint: 'https://s3.cstcloud.cn',
+  region: 'us-east-1',
+  bucket: '',
+  ak: '',
+  sk: '',
+  ua: 'rclone/v1.66.0',
+  prefix: 'personal-tab/',
+  auto: false,
+  keep: 30,
+  lastBackupAt: 0
+}
+
+function cloudMaskSk(sk) {
+  if (!sk) return ''
+  if (sk.length <= 8) return '****'
+  return sk.slice(0, 4) + '****' + sk.slice(-4)
+}
+
+function cloudS3Cfg(c) {
+  return { endpoint: c.endpoint, region: c.region, bucket: c.bucket, ak: c.ak, sk: c.sk, ua: c.ua }
+}
+
+function cloudExcluded(key) {
+  return key.startsWith('token_') || key === CLOUD_CONFIG_KEY
+}
+
+async function cloudLoadCfg(kv) {
+  const saved = await kv.get(CLOUD_CONFIG_KEY, { type: 'json' })
+  return { ...CLOUD_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) }
+}
+
+async function cloudSnapshot(kv) {
+  const data = {}
+  for (const key of Array.from(store.keys())) {
+    if (cloudExcluded(key)) continue
+    const v = store.get(key)
+    if (v != null) data[key] = v
+  }
+  return data
+}
+
+function cloudTsName(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0')
+  return (
+    d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+    '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds())
+  )
+}
+
+async function cloudListAndPrune(cfg) {
+  const prefix = cfg.prefix || CLOUD_DEFAULTS.prefix
+  const res = await s3Request(cloudS3Cfg(cfg), {
+    method: 'GET',
+    query: { 'list-type': 2, prefix, 'max-keys': 1000 }
+  })
+  if (!res.ok) throw new Error('列取备份失败(' + res.status + '): ' + res.text.slice(0, 120))
+  const mine = parseListXml(res.text).objects
+    .filter((o) => o.key.startsWith(prefix) && o.key.endsWith('.json'))
+    .sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1))
+  const keep = Number(cfg.keep) || 30
+  for (const o of mine.slice(keep)) {
+    await s3Request(cloudS3Cfg(cfg), { method: 'DELETE', key: o.key })
+  }
+  return mine
 }
 
 // === 路由处理 ===
@@ -572,6 +797,101 @@ async function handleRequest(req, res) {
       return jsonResponse(res, { ok: true, count: body.groups?.length || 0 })
     }
 
+    // === 云盘备份(数据胶囊 S3) ===
+    if (path === '/api/cloud' && method === 'GET') {
+      const cfg = await cloudLoadCfg(getKV())
+      const { sk, ...rest } = cfg
+      return jsonResponse(res, { ...rest, skSet: !!sk, skMask: cloudMaskSk(sk) })
+    }
+
+    if (path === '/api/cloud' && method === 'PUT') {
+      const body = await parseBody(req)
+      if (!body || typeof body !== 'object') return errorResponse(res, '配置必须是对象', 400)
+      const kv = getKV()
+      const cur = await cloudLoadCfg(kv)
+      const next = {
+        ...cur,
+        endpoint: (body.endpoint || cur.endpoint).toString().trim().replace(/\/+$/, ''),
+        region: (body.region || cur.region).toString().trim(),
+        bucket: (body.bucket != null ? body.bucket : cur.bucket).toString().trim(),
+        ak: (body.ak != null ? body.ak : cur.ak).toString().trim(),
+        sk: body.sk ? body.sk.toString() : cur.sk,
+        ua: (body.ua || cur.ua).toString().trim() || CLOUD_DEFAULTS.ua,
+        prefix: ((body.prefix != null ? body.prefix : cur.prefix).toString().trim().replace(/^\/+/, '') || CLOUD_DEFAULTS.prefix),
+        auto: !!body.auto
+      }
+      if (!next.prefix.endsWith('/')) next.prefix += '/'
+      await kv.put(CLOUD_CONFIG_KEY, JSON.stringify(next))
+      const { sk, ...rest } = next
+      return jsonResponse(res, { ok: true, ...rest, skSet: !!sk, skMask: cloudMaskSk(sk) })
+    }
+
+    if (path === '/api/cloud' && method === 'POST') {
+      const body = await parseBody(req)
+      const action = body && body.action
+      const kv = getKV()
+      const cfg = await cloudLoadCfg(kv)
+      if (!cfg.bucket || !cfg.ak || !cfg.sk) {
+        return errorResponse(res, '尚未配置云盘信息(端点/Bucket/AK/SK)', 400)
+      }
+      try {
+        if (action === 'test') {
+          const r = await s3Request(cloudS3Cfg(cfg), {
+            method: 'GET',
+            query: { 'list-type': 2, prefix: cfg.prefix, 'max-keys': 1 }
+          })
+          if (!r.ok) return jsonResponse(res, { ok: false, error: `连接失败(HTTP ${r.status}) ${r.text.slice(0, 120)}` })
+          return jsonResponse(res, { ok: true, message: '连接成功' })
+        }
+
+        if (action === 'run') {
+          const data = await cloudSnapshot(kv)
+          const meta = { app: 'personal-tab', version: 1, exportedAt: new Date().toISOString(), keys: Object.keys(data).length }
+          const payload = JSON.stringify({ meta, data })
+          const key = `${cfg.prefix}backup-${cloudTsName()}.json`
+          const r = await s3Request(cloudS3Cfg(cfg), { method: 'PUT', key, body: payload })
+          if (!r.ok) return jsonResponse(res, { ok: false, error: `上传失败(HTTP ${r.status}) ${r.text.slice(0, 120)}` })
+          const size = new TextEncoder().encode(payload).length
+          const list = await cloudListAndPrune(cfg)
+          const next = { ...cfg, lastBackupAt: Date.now() }
+          await kv.put(CLOUD_CONFIG_KEY, JSON.stringify(next))
+          return jsonResponse(res, { ok: true, key, size, count: meta.keys, lastBackupAt: next.lastBackupAt, backups: list.slice(0, 50) })
+        }
+
+        if (action === 'list') {
+          const list = await cloudListAndPrune(cfg)
+          return jsonResponse(res, { ok: true, backups: list.slice(0, 50) })
+        }
+
+        if (action === 'restore') {
+          const key = (body.key || '').toString()
+          const prefix = cfg.prefix || CLOUD_DEFAULTS.prefix
+          if (!key.startsWith(prefix) || key.includes('..')) return errorResponse(res, '非法的备份文件名', 400)
+          const r = await s3Request(cloudS3Cfg(cfg), { method: 'GET', key })
+          if (!r.ok) return jsonResponse(res, { ok: false, error: `读取备份失败(HTTP ${r.status}) ${r.text.slice(0, 120)}` })
+          let parsed
+          try {
+            parsed = JSON.parse(r.text)
+          } catch {
+            return errorResponse(res, '备份文件损坏(非合法 JSON)', 400)
+          }
+          const data = parsed && parsed.data
+          if (!data || typeof data !== 'object') return errorResponse(res, '备份文件格式不正确', 400)
+          let count = 0
+          for (const [k, v] of Object.entries(data)) {
+            if (cloudExcluded(k) || typeof v !== 'string') continue
+            await kv.put(k, v)
+            count++
+          }
+          return jsonResponse(res, { ok: true, count, exportedAt: parsed.meta && parsed.meta.exportedAt })
+        }
+
+        return errorResponse(res, '未知操作: ' + action, 400)
+      } catch (e) {
+        return jsonResponse(res, { ok: false, error: e.message || String(e) })
+      }
+    }
+
     // === 跨分组移动书签(后端单次原子完成) ===
     const moveMatch = path.match(/^\/api\/groups\/([^/]+)\/move$/)
     if (moveMatch && method === 'POST') {
@@ -800,6 +1120,123 @@ async function handleRequest(req, res) {
         }
       }
       return errorResponse(res, '图标获取失败', 404)
+    }
+
+    // === 法定节假日+调休(holiday-cn 开源数据,jsdelivr -> raw 兜底;内存缓存 24h) ===
+    if (path === '/api/holiday' && method === 'GET') {
+      const y = parseInt(url.searchParams.get('year') || '', 10)
+      if (!y || y < 2004 || y > 2100) return errorResponse(res, '参数 year 无效', 400)
+      const hc = holidayCache.get(y)
+      if (hc && Date.now() - hc.t < 24 * 3600 * 1000) return jsonResponse(res, { year: hc.year, days: hc.days })
+      const timeoutOpt = () => ({ signal: AbortSignal.timeout(8000) })
+      const sources = [
+        `https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/${y}.json`,
+        `https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/${y}.json`
+      ]
+      let lastErr = null
+      for (const src of sources) {
+        try {
+          const r = await fetch(src, timeoutOpt())
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          const d = await r.json()
+          if (!Array.isArray(d.days)) throw new Error('数据格式无效')
+          const days = d.days
+            .filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.date || ''))
+            .map((x) => ({ date: x.date, name: String(x.name || ''), off: x.isOffDay !== false }))
+          const rec = { year: d.year || y, days }
+          holidayCache.set(y, { ...rec, t: Date.now() })
+          return jsonResponse(res, rec)
+        } catch (e) {
+          lastErr = e
+        }
+      }
+      if (hc && Array.isArray(hc.days)) return jsonResponse(res, { year: hc.year, days: hc.days })
+      return errorResponse(res, '节假日数据获取失败: ' + (lastErr && lastErr.message), 502)
+    }
+
+    // === 天气(Open-Meteo 免 key 代理;内存缓存 30min) ===
+    if (path === '/api/weather' && method === 'GET') {
+      const city = (url.searchParams.get('city') || '').trim()
+      if (!city || city.length > 40) return errorResponse(res, '参数 city 无效', 400)
+      const ck = city.toLowerCase()
+      const wc = weatherCache.get(ck)
+      if (wc && Date.now() - wc.t < 30 * 60 * 1000) return jsonResponse(res, wc.data)
+
+      const timeoutOpt = () => ({ signal: AbortSignal.timeout(8000) })
+      try {
+        const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`
+        const gr = await fetch(geoUrl, timeoutOpt())
+        if (!gr.ok) throw new Error('城市定位失败(' + gr.status + ')')
+        const gd = await gr.json()
+        const g = gd && Array.isArray(gd.results) ? gd.results[0] : null
+        if (!g || typeof g.latitude !== 'number') throw new Error(`未找到城市「${city}」`)
+
+        const qs = new URLSearchParams({
+          latitude: String(g.latitude),
+          longitude: String(g.longitude),
+          current: 'temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,surface_pressure,precipitation',
+          hourly: 'temperature_2m,weather_code,precipitation_probability,is_day',
+          daily: 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max,wind_speed_10m_max,uv_index_max',
+          timezone: 'auto',
+          forecast_days: '7',
+          forecast_hours: '24'
+        })
+        const wr = await fetch(`https://api.open-meteo.com/v1/forecast?${qs}`, timeoutOpt())
+        if (!wr.ok) throw new Error('天气获取失败(' + wr.status + ')')
+        const wd = await wr.json()
+        const c = wd.current || {}
+        const cw = wmoCode(c.weather_code)
+        const hTimes = (wd.hourly && wd.hourly.time) || []
+        const hourly = hTimes.map((t, i) => {
+          const hw = wmoCode(wd.hourly.weather_code[i])
+          const pop = wd.hourly.precipitation_probability ? wd.hourly.precipitation_probability[i] : null
+          return {
+            time: t,
+            temp: Math.round(wd.hourly.temperature_2m[i]),
+            text: hw.text,
+            icon: hw.icon,
+            pop: typeof pop === 'number' ? pop : null,
+            isDay: wd.hourly.is_day ? wd.hourly.is_day[i] === 1 : true
+          }
+        })
+        const daily = ((wd.daily && wd.daily.time) || []).map((t, i) => {
+          const dw = wmoCode(wd.daily.weather_code[i])
+          return {
+            date: t,
+            text: dw.text,
+            icon: dw.icon,
+            max: Math.round(wd.daily.temperature_2m_max[i]),
+            min: Math.round(wd.daily.temperature_2m_min[i]),
+            sunrise: (wd.daily.sunrise && wd.daily.sunrise[i]) || '',
+            sunset: (wd.daily.sunset && wd.daily.sunset[i]) || '',
+            pop: typeof wd.daily.precipitation_probability_max[i] === 'number' ? wd.daily.precipitation_probability_max[i] : null,
+            windMax: typeof wd.daily.wind_speed_10m_max[i] === 'number' ? Math.round(wd.daily.wind_speed_10m_max[i]) : null,
+            uv: typeof wd.daily.uv_index_max[i] === 'number' ? Math.round(wd.daily.uv_index_max[i]) : null
+          }
+        })
+        const data = {
+          city: g.name,
+          admin: g.admin1 || '',
+          current: {
+            temp: Math.round(c.temperature_2m),
+            feels: Math.round(c.apparent_temperature),
+            text: cw.text,
+            icon: cw.icon,
+            humidity: Math.round(c.relative_humidity_2m),
+            wind: Math.round(c.wind_speed_10m),
+            pressure: typeof c.surface_pressure === 'number' ? Math.round(c.surface_pressure) : null,
+            rain: typeof c.precipitation === 'number' ? c.precipitation : null
+          },
+          hourly,
+          daily,
+          updated: new Date().toISOString()
+        }
+        weatherCache.set(ck, { data, t: Date.now() })
+        return jsonResponse(res, data)
+      } catch (e) {
+        if (wc && wc.data) return jsonResponse(res, wc.data)
+        return errorResponse(res, e.message || '天气获取失败', 502)
+      }
     }
 
     // === 热榜聚合(内存缓存 10min;单源失败互不影响) ===
