@@ -81,26 +81,23 @@ onUnmounted(() => {
   justify-content: center;
   padding: 10px 14px;
   cursor: pointer;
-  border-radius: 20px;
-  background: linear-gradient(150deg, #6aa5f8 0%, #4a90e2 45%, #3a7bd5 100%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 8px 24px rgba(58, 123, 213, 0.25);
+  border-radius: var(--tile-radius);
+  background: var(--tile-grad-weather);
+  border: 1px solid var(--tile-fg-border);
+  box-shadow: var(--tile-shadow);
   transition: 0.28s var(--ease);
   user-select: none;
   overflow: hidden;
 }
 
 .wx-widget:hover {
-  transform: translateY(-4px);
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.05),
-    0 16px 40px rgba(58, 123, 213, 0.35);
+  transform: translateY(var(--tile-lift));
+  border-color: var(--tile-fg-border-strong);
+  box-shadow: var(--tile-shadow-hover);
 }
 
 .wx-widget:active {
-  transform: translateY(-1px) scale(0.98);
+  transform: var(--tile-press);
   transition-duration: 0.1s;
 }
 
@@ -114,7 +111,7 @@ onUnmounted(() => {
 .wx-city {
   font-size: 11.5px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--tile-fg-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -122,7 +119,7 @@ onUnmounted(() => {
 
 .wx-text {
   font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--tile-fg-soft);
   white-space: nowrap;
 }
 
@@ -141,7 +138,7 @@ onUnmounted(() => {
 .wx-temp {
   font-size: 30px;
   font-weight: 700;
-  color: #fff;
+  color: var(--tile-fg);
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -1px;
@@ -153,7 +150,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 6px;
   font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--tile-fg-soft);
   font-variant-numeric: tabular-nums;
 }
 
@@ -182,7 +179,7 @@ onUnmounted(() => {
 .wx-sk-big {
   height: 14px;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12) 25%, rgba(255, 255, 255, 0.26) 40%, rgba(255, 255, 255, 0.12) 55%);
+  background: var(--tile-shimmer);
   background-size: 320px 100%;
   animation: wxShimmer 1.1s linear infinite;
 }

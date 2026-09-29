@@ -2,7 +2,7 @@
   <WidgetCard
     title="记事本"
     :badge="notesLoaded && notes.length > 0 ? `${notes.length} 条` : ''"
-    tile="linear-gradient(150deg, #ffb64c 0%, #f7882f 45%, #d8531d 100%)"
+    tile="var(--tile-grad-note)"
     icon-bg="rgba(255,255,255,0.22)"
     :flip="notesLoaded && sortedNotes.length > 0"
     @open="$emit('open')"

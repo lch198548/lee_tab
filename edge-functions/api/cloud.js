@@ -37,9 +37,13 @@ function s3Cfg(c) {
   return { endpoint: c.endpoint, region: c.region, bucket: c.bucket, ak: c.ak, sk: c.sk, ua: c.ua }
 }
 
-// 快照时排除的键:会话 token 与备份配置自身
+// 快照时排除的键:会话 token、备份配置自身、含空白字符的坏键(COS 无法读写,如历史遗留的图库缓存)
 function excluded(key) {
-  return key.startsWith('token_') || key === CONFIG_KEY
+  return (
+    key.startsWith('token_') ||
+    key === CONFIG_KEY ||
+    /[\s\u0000-\u001f\u007f]/.test(key)
+  )
 }
 
 async function loadCfg(kv) {
@@ -47,16 +51,21 @@ async function loadCfg(kv) {
   return { ...DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) }
 }
 
-// 全量 KV 快照:{ key: 文本值 }
+// 全量 KV 快照:{ key: 文本值 };单键读取失败跳过(坏键只影响自身,不阻塞整单备份)
 async function snapshot(kv) {
   const listed = await kv.list({ prefix: '' })
   const data = {}
+  let skipped = 0
   for (const { key } of listed) {
     if (!key || excluded(key)) continue
-    const v = await kv.get(key)
-    if (v != null) data[key] = typeof v === 'string' ? v : String(v)
+    try {
+      const v = await kv.get(key)
+      if (v != null) data[key] = typeof v === 'string' ? v : String(v)
+    } catch (_e) {
+      skipped++
+    }
   }
-  return data
+  return { data, skipped }
 }
 
 function tsName(d = new Date()) {
@@ -159,12 +168,13 @@ export async function onRequestPost({ request, env }) {
 
     // === 执行备份:全量快照 -> 单 JSON 对象 -> 清理旧版 ===
     if (action === 'run') {
-      const data = await snapshot(kv)
+      const { data, skipped } = await snapshot(kv)
       const meta = {
         app: 'personal-tab',
         version: 1,
         exportedAt: new Date().toISOString(),
-        keys: Object.keys(data).length
+        keys: Object.keys(data).length,
+        skipped
       }
       const payload = JSON.stringify({ meta, data })
       const key = `${cfg.prefix}backup-${tsName()}.json`
@@ -181,6 +191,7 @@ export async function onRequestPost({ request, env }) {
         key,
         size,
         count: meta.keys,
+        skipped,
         lastBackupAt: next.lastBackupAt,
         backups: list.slice(0, 50)
       })
@@ -214,12 +225,17 @@ export async function onRequestPost({ request, env }) {
         return errorResponse('备份文件格式不正确', 400)
       }
       let count = 0
+      let skipped = 0
       for (const [k, v] of Object.entries(data)) {
         if (excluded(k) || typeof v !== 'string') continue
-        await kv.put(k, v)
-        count++
+        try {
+          await kv.put(k, v)
+          count++
+        } catch (_e) {
+          skipped++
+        }
       }
-      return jsonResponse({ ok: true, count, exportedAt: parsed.meta && parsed.meta.exportedAt })
+      return jsonResponse({ ok: true, count, skipped, exportedAt: parsed.meta && parsed.meta.exportedAt })
     }
 
     return errorResponse('未知操作: ' + action, 400)

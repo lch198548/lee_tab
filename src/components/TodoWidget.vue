@@ -2,7 +2,7 @@
   <WidgetCard
     title="待办"
     :badge="totalTodos > 0 ? `${doneTodos.length}/${totalTodos}` : ''"
-    tile="linear-gradient(150deg, color-mix(in srgb, var(--accent) 85%, #ffffff) 0%, var(--accent) 45%, color-mix(in srgb, var(--accent) 58%, #0b1220) 100%)"
+    tile="var(--tile-grad-todo)"
     icon-bg="rgba(255,255,255,0.22)"
     :flip="totalTodos > 0"
     @open="$emit('open')"

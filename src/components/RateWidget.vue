@@ -2,7 +2,7 @@
   <WidgetCard
     title="汇率"
     :badge="dateText"
-    tile="linear-gradient(150deg, #4cc3b0 0%, #1ba99a 45%, #0b7d74 100%)"
+    tile="var(--tile-grad-rate)"
     icon-bg="rgba(255,255,255,0.22)"
     :flip="ratesLoaded"
     @open="$emit('open')"
@@ -129,7 +129,7 @@ onUnmounted(() => {
 
 .rw-name {
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--tile-fg-strong);
   flex-shrink: 0;
 }
 
@@ -137,7 +137,7 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   font-size: 10.5px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--tile-fg-faint);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -145,7 +145,7 @@ onUnmounted(() => {
 .rw-val {
   font-size: 13.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--tile-fg);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
@@ -162,18 +162,18 @@ onUnmounted(() => {
 
 .rw-empty-title {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--tile-fg-strong);
 }
 
 .rw-empty-sub {
   font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--tile-fg-faint);
 }
 
 /* 底部 */
 .rw-time {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--tile-fg-soft);
 }
 
 .rw-refresh {

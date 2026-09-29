@@ -57,29 +57,25 @@ const lunarText = computed(() => lunarShort(lunar, special))
   justify-content: center;
   padding: 10px 14px;
   cursor: pointer;
-  border-radius: 20px;
+  border-radius: var(--tile-radius);
   background: var(--bg-glass-strong);
   backdrop-filter: blur(32px) saturate(1.7);
   -webkit-backdrop-filter: blur(32px) saturate(1.7);
   border: 1px solid var(--border-color);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--tile-shadow);
   transition: 0.28s var(--ease);
   user-select: none;
   overflow: hidden;
 }
 
 .cal-widget:hover {
-  transform: translateY(-4px);
+  transform: translateY(var(--tile-lift));
   border-color: var(--border-strong);
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.05),
-    0 16px 40px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--tile-shadow-hover);
 }
 
 .cal-widget:active {
-  transform: translateY(-1px) scale(0.98);
+  transform: var(--tile-press);
   transition-duration: 0.1s;
 }
 

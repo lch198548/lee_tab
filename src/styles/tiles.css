@@ -1,0 +1,53 @@
+/* ============================================================
+   磁贴设计令牌(Design Tokens)—— 全部插件磁贴的单一视觉来源
+   渐变/白色前景体系/几何/阴影在此定义,组件内只引用变量;
+   新增插件磁贴时直接套用,保证跨磁贴质感一致。
+   ============================================================ */
+:root {
+  /* ---- 磁贴渐变(统一 150deg 三段式:亮 → 主色 → 深) ---- */
+  /* 待办/通用强调色磁贴(引用主题 accent) */
+  --tile-grad-todo: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--accent) 85%, #ffffff) 0%,
+    var(--accent) 45%,
+    color-mix(in srgb, var(--accent) 58%, #0b1220) 100%
+  );
+  /* 热榜:橙红 */
+  --tile-grad-hot: linear-gradient(150deg, #ff9a62 0%, #f4692e 45%, #d84315 100%);
+  /* 记事本:琥珀 */
+  --tile-grad-note: linear-gradient(150deg, #ffb64c 0%, #f7882f 45%, #d8531d 100%);
+  /* 汇率:青绿 */
+  --tile-grad-rate: linear-gradient(150deg, #4cc3b0 0%, #1ba99a 45%, #0b7d74 100%);
+  /* 天气:晴空蓝 */
+  --tile-grad-weather: linear-gradient(150deg, #6aa5f8 0%, #4a90e2 45%, #3a7bd5 100%);
+
+  /* ---- on-tile 白色前景体系(彩色渐变底上的文字/描边/底色) ---- */
+  --tile-fg: #ffffff; /* 主文字/数值 */
+  --tile-fg-strong: rgba(255, 255, 255, 0.95); /* 次级强调文字 */
+  --tile-fg-soft: rgba(255, 255, 255, 0.72); /* 辅助文字(时间/说明) */
+  --tile-fg-faint: rgba(255, 255, 255, 0.55); /* 弱化文字(标签/脚注) */
+  --tile-fg-border: rgba(255, 255, 255, 0.18); /* 磁贴描边 */
+  --tile-fg-border-strong: rgba(255, 255, 255, 0.5); /* hover 描边 */
+  --tile-pill: rgba(255, 255, 255, 0.12); /* 徽标/排名块底色 */
+  --tile-pill-active: rgba(255, 255, 255, 0.32); /* 高亮徽标底色 */
+  --tile-hover-bg: rgba(255, 255, 255, 0.14); /* 行 hover */
+
+  /* ---- 骨架屏 shimmer(磁贴内统一) ---- */
+  --tile-shimmer: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 25%,
+    rgba(255, 255, 255, 0.24) 40%,
+    rgba(255, 255, 255, 0.1) 55%
+  );
+
+  /* ---- 几何与阴影 ---- */
+  --tile-radius: 20px;
+  --tile-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08);
+  --tile-shadow-hover:
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 16px 40px rgba(0, 0, 0, 0.14);
+  --tile-lift: -4px; /* hover 上浮距离 */
+  --tile-press: translateY(-1px) scale(0.99); /* 按下反馈 */
+}

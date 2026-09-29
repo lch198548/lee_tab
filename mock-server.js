@@ -417,7 +417,11 @@ function cloudS3Cfg(c) {
 }
 
 function cloudExcluded(key) {
-  return key.startsWith('token_') || key === CLOUD_CONFIG_KEY
+  return (
+    key.startsWith('token_') ||
+    key === CLOUD_CONFIG_KEY ||
+    /[\s\u0000-\u001f\u007f]/.test(key)
+  )
 }
 
 async function cloudLoadCfg(kv) {

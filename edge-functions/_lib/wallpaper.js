@@ -52,7 +52,8 @@ function timeoutOpt() {
 // 多源图库列表(供设置面板选择;图片前端直连,后端只出元数据)
 // source: bing(最近30天) / picsum(Lorem Picsum) / wallhaven(搜索)
 export async function getGallery(kv, source, q, page) {
-  const key = `wp_gallery_${source}_${page}_${q}`
+  // 搜索词需 URL 编码:COS 对含空格等特殊字符的对象键会 502
+  const key = `wp_gallery_${source}_${page}_${encodeURIComponent(String(q || ''))}`
   const cached = await kvGetJSON(kv, key, null)
   if (cached && Array.isArray(cached.gallery) && cached.gallery.length && Date.now() - (cached.t || 0) < GALLERY_TTL) {
     return cached.gallery

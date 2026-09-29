@@ -2,7 +2,7 @@
   <WidgetCard
     title="热榜"
     :badge="sourceName"
-    tile="linear-gradient(150deg, #ff9a62 0%, #f4692e 45%, #d84315 100%)"
+    tile="var(--tile-grad-hot)"
     icon-bg="rgba(255,255,255,0.22)"
     :flip="headlines.length > 0"
     @open="$emit('open')"
@@ -158,7 +158,7 @@ onUnmounted(() => {
 }
 
 .hw-row:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--tile-hover-bg);
 }
 
 .hw-rank {
@@ -170,22 +170,22 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--tile-fg-faint);
+  background: var(--tile-pill);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
 .hw-rank.top {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.32);
+  color: var(--tile-fg);
+  background: var(--tile-pill-active);
 }
 
 .hw-title {
   flex: 1;
   min-width: 0;
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--tile-fg-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -220,7 +220,7 @@ onUnmounted(() => {
 .hw-sk-title {
   height: 18px;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 25%, rgba(255, 255, 255, 0.24) 40%, rgba(255, 255, 255, 0.1) 55%);
+  background: var(--tile-shimmer);
   background-size: 320px 100%;
   animation: hwShimmer 1.1s linear infinite;
   flex-shrink: 0;
