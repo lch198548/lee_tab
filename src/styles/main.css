@@ -1,66 +1,65 @@
-/* 全局样式变量 - 主题色 */
+/* 全局样式变量 - 深空配色(唯一配色,不可切换) */
 :root {
-  --bg-page: #1f2937;
-  --bg-card: rgba(255, 255, 255, 0.06);
-  --bg-card-hover: rgba(255, 255, 255, 0.12);
-  --bg-glass: rgba(20, 25, 35, 0.5);
-  --bg-glass-strong: rgba(20, 25, 35, 0.75);
-  --bg-modal: #374151;
-  --bg-input: rgba(255, 255, 255, 0.08);
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  --bg-page: #0e131c;
+  --bg-card: rgba(255, 255, 255, 0.07);
+  --bg-card-hover: rgba(255, 255, 255, 0.14);
+  --bg-glass: rgba(13, 18, 28, 0.35);
+  --bg-glass-strong: rgba(13, 18, 28, 0.58);
+  --bg-modal: rgba(21, 28, 42, 0.72);
+  --bg-input: rgba(255, 255, 255, 0.09);
+  --text-primary: #eef2f8;
+  --text-secondary: #9aa7bd;
+  --text-muted: #66748c;
   --border-color: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.2);
-  --accent: #60a5fa;
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent: #5ea2ff;
   --accent-hover: #3b82f6;
   --danger: #f87171;
   --success: #34d399;
   --warning: #fbbf24;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.18), 0 12px 32px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.2), 0 24px 64px rgba(0, 0, 0, 0.35);
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
-  --transition: 0.2s ease;
+  --radius-xl: 20px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --transition: 0.2s var(--ease);
 
-  /* ===== 可自定义区域变量(由配色主题控制) ===== */
+  /* ===== 功能区域变量(统一引用 accent,保证同色) ===== */
   /* 搜索框 */
-  --search-bg: rgba(20, 25, 35, 0.75);
-  --search-text: #f3f4f6;
-  --search-placeholder: #6b7280;
-  --search-btn-bg: #60a5fa;
+  --search-bg: rgba(13, 18, 28, 0.55);
+  --search-text: #eef2f8;
+  --search-placeholder: rgba(255, 255, 255, 0.6);
+  --search-btn-bg: var(--accent);
   --search-btn-icon: #ffffff;
   /* 搜索 tab */
-  --search-tab-default-bg: transparent;
-  --search-tab-active-bg: #60a5fa;
-  --search-tab-text: #9ca3af;
+  --search-tab-default-bg: rgba(255, 255, 255, 0.07);
+  --search-tab-active-bg: var(--accent);
+  --search-tab-text: #9aa7bd;
   --search-tab-active-text: #ffffff;
   /* 书签分组标签 */
-  --group-tab-default-bg: rgba(255, 255, 255, 0.06);
-  --group-tab-active-bg: #60a5fa;
-  --group-tab-text: #9ca3af;
+  --group-tab-default-bg: rgba(255, 255, 255, 0.07);
+  --group-tab-active-bg: var(--accent);
+  --group-tab-text: #9aa7bd;
   --group-tab-active-text: #ffffff;
   /* 书签文字 */
-  --bookmark-text: #f3f4f6;
+  --bookmark-text: #eef2f8;
   --bookmark-font-size: 14px;
   /* 时间日期 */
-  --time-color: #f3f4f6;
+  --time-color: #eef2f8;
   --time-font-size: 64px;
-  --date-color: #9ca3af;
+  --date-color: #9aa7bd;
   --date-font-size: 15px;
   /* 顶部导航 */
-  --topbar-bg: #141923;
+  --topbar-bg: #0d121c;
   --topbar-opacity: 0.5;
   /* 图标 */
-  --icon-color: #9ca3af;
+  --icon-color: #9aa7bd;
   --icon-size: 17px;
-  /* 右侧分组切换 */
-  --sidebar-bg: rgba(20, 25, 35, 0.75);
-  --sidebar-dot: #6b7280;
-  --sidebar-dot-active: #60a5fa;
-  --sidebar-arrow: #9ca3af;
-  --sidebar-text: #f3f4f6;
+  /* 分组侧边栏 */
+  --sidebar-bg: rgba(11, 16, 25, 0.45);
+  --sidebar-text: #9aa7bd;
 }
 
 * {
@@ -130,8 +129,17 @@ select:focus {
   border-radius: 4px;
 }
 
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text-primary);
 }
 
 .fade-enter-active,
@@ -147,14 +155,14 @@ select:focus {
 /* 通用工具类 */
 .glass {
   background: var(--bg-glass);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
   border: 1px solid var(--border-color);
 }
 
 .glass-strong {
   background: var(--bg-glass-strong);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(36px) saturate(1.8);
+  -webkit-backdrop-filter: blur(36px) saturate(1.8);
   border: 1px solid var(--border-strong);
 }

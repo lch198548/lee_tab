@@ -1,0 +1,119 @@
+/* ============================================================
+   弹窗皮肤规范 v2：瓷白卡片（Porcelain Modal）
+   ------------------------------------------------------------
+   统一所有弹出面板的视觉：白色实体面板 + 浅灰分组底 +
+   iOS 开关 + 大圆角（macOS 系统设置风）。深空/云白主题下均可用。
+
+   用法：弹窗根元素加 class "modal-skin" 即可整体生效。
+   新增弹窗（天气/热搜等插件）一律复用本规范，不另起炉灶。
+   换肤：只改本文件的变量映射，组件零改动。
+   ============================================================ */
+
+.modal-skin {
+  /* 重映射应用主题变量 → 瓷白色板（弹窗内部一律走这些变量） */
+  --bg-modal: #ffffff;
+  --bg-card: #f7f7f9;
+  --bg-card-hover: #f0f0f3;
+  --bg-input: #f2f2f5;
+  --border-color: rgba(17, 17, 17, 0.08);
+  --border-strong: rgba(17, 17, 17, 0.22);
+  --text-primary: #1a1a1a;
+  --text-secondary: #5f5f66;
+  --text-muted: #8e8e93;
+  --accent: #0a66ff;
+  --accent-hover: #0857d6;
+  --danger: #e24b4a;
+  --success: #34c759;
+  --warning: #f5a623;
+
+  color: #3a3a3e;
+}
+
+/* 原生控件统一 */
+.modal-skin input[type='text'],
+.modal-skin input[type='url'],
+.modal-skin input[type='password'],
+.modal-skin textarea,
+.modal-skin select {
+  color: var(--text-primary);
+  caret-color: var(--accent);
+}
+
+.modal-skin input::placeholder,
+.modal-skin textarea::placeholder {
+  color: #b0b0b6;
+}
+
+.modal-skin input[type='checkbox'],
+.modal-skin input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+.modal-skin select option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.modal-skin input[type='range'] {
+  background: #e4e4e9;
+}
+
+.modal-skin input[type='range']::-webkit-slider-thumb {
+  background: #0a66ff;
+  border-color: #ffffff;
+}
+
+.modal-skin input[type='range']::-moz-range-thumb {
+  background: #0a66ff;
+  border-color: #ffffff;
+}
+
+/* 滚动条统一 */
+.modal-skin ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.modal-skin ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-skin ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.modal-skin ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* 弹窗通用阴影（柔和双层投影） */
+.modal-skin {
+  box-shadow:
+    0 0 0 0.5px rgba(17, 17, 17, 0.06),
+    0 24px 70px rgba(0, 0, 0, 0.18);
+}
+
+/* 顶部 1px 高光(macOS 质感的点睛之笔) */
+.modal-skin {
+  position: relative;
+}
+
+.modal-skin::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.9) 15%,
+    rgba(255, 255, 255, 0.9) 85%,
+    transparent
+  );
+  pointer-events: none;
+  z-index: 3;
+}

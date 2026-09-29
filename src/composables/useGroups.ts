@@ -28,11 +28,22 @@ export function useGroups() {
     cacheGroups.set(res.groups)
   }
 
-  async function createGroup(name: string) {
-    const res = await api.createGroup(name)
+  async function createGroup(name: string, icon = '') {
+    const res = await api.createGroup(name, icon)
     state.groups.push(res.group)
     cacheGroups.set(state.groups)
     return res
+  }
+
+  // 更新分组名称/图标(侧边栏右键编辑)
+  async function updateGroup(id: string, payload: { name?: string; icon?: string }) {
+    await api.updateGroup(id, payload)
+    const g = state.groups.find((x) => x.id === id)
+    if (g) {
+      if (payload.name !== undefined) g.name = payload.name
+      if (payload.icon !== undefined) g.icon = payload.icon
+    }
+    cacheGroups.set(state.groups)
   }
 
   async function renameGroup(id: string, name: string) {
@@ -82,30 +93,38 @@ export function useGroups() {
     cacheGroups.set(state.groups)
   }
 
-  // 跨分组移动书签(从源分组移除并追加到目标分组),两次保存保证原子性
+  // 跨分组移动书签:后端单次原子写入(带乐观锁),成功后同步本地状态
   async function moveBookmarkToGroup(fromGroupId: string, bookmarkId: string, toGroupId: string) {
     if (!fromGroupId || !toGroupId || fromGroupId === toGroupId) return
+
+    try {
+      await api.moveBookmark(fromGroupId, bookmarkId, toGroupId)
+    } catch (e) {
+      // 后端乐观锁重试仍冲突:丢弃本地缓存,从服务端重载真实数据
+      const res = await api.getGroups().catch(() => null)
+      if (res) {
+        state.groups = res.groups
+        cacheGroups.set(state.groups)
+      }
+      throw e
+    }
+
     const fromG = state.groups.find((x) => x.id === fromGroupId)
     const toG = state.groups.find((x) => x.id === toGroupId)
     if (!fromG || !toG) return
 
     const idx = fromG.bookmarks.findIndex((b) => b.id === bookmarkId)
     if (idx === -1) return
-    const bm = fromG.bookmarks.splice(idx, 1)
-    if (bm.length === 0) return
-
-    const moved = { ...bm[0], favorite: false, sort: toG.bookmarks.length }
-    toG.bookmarks.push(moved)
-
-    // 先保存目标分组(新增),再保存源分组(移除),顺序无关但逐次更新 state 保持正确
-    await saveBookmarks(toGroupId, toG.bookmarks)
-    await saveBookmarks(fromGroupId, fromG.bookmarks)
+    const [bm] = fromG.bookmarks.splice(idx, 1)
+    toG.bookmarks.push({ ...bm, favorite: false, sort: toG.bookmarks.length })
+    cacheGroups.set(state.groups)
   }
 
   return {
     loadGroups,
     createGroup,
     renameGroup,
+    updateGroup,
     deleteGroup,
     reorderGroups,
     saveGroupSort,

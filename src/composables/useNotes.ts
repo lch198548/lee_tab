@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { api, type Note } from '@/api'
 
 const notes = ref<Note[]>([])
+const notesLoaded = ref(false)
 let loaded = false
 
 export function useNotes() {
@@ -28,9 +29,11 @@ export function useNotes() {
     try {
       const res = await api.getNotes()
       notes.value = (res.notes || []).map(migrateNote)
-      loaded = true
     } catch {
       notes.value = []
+    } finally {
+      loaded = true
+      notesLoaded.value = true
     }
   }
 
@@ -69,6 +72,7 @@ export function useNotes() {
 
   return {
     notes,
+    notesLoaded,
     loadNotes,
     createNote,
     updateNote,

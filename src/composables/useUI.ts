@@ -1,11 +1,25 @@
 import { reactive } from 'vue'
 import { api } from '@/api'
 
+export interface FavLayoutItem {
+  key: string
+  x: number
+  y: number
+}
+
 export interface UIState {
   // 待办面板位置,使用百分比(0-100)表示距视口左上角的位置
   // 百分比定位使窗口缩放时面板始终保持相似相对位置,min/max 保护确保始终可见
   todoPanelX: number
   todoPanelY: number
+  // 常用页小组件拖拽排序(插件 id 列表,旧版字段,仅用于迁移)
+  favWidgetOrder: string[]
+  // 常用页二维自由布局(每项的网格坐标,允许空洞;旧版字符串数组会按顺序自动排布)
+  favLayout: FavLayoutItem[]
+  // 基金插件:用户自选基金代码列表
+  fundCodes: string[]
+  // 热榜插件:默认展示的热榜源 id(见后端 /api/hot 支持的源)
+  hotSource: string
 }
 
 // 待办面板近似宽度,用于旧像素坐标换算
@@ -13,7 +27,11 @@ const PANEL_W = 300
 
 const defaults: UIState = {
   todoPanelX: 68,   // 距左 68%(右侧区域)
-  todoPanelY: 12    // 距顶 12%
+  todoPanelY: 12,   // 距顶 12%
+  favWidgetOrder: ['todo', 'notepad'],
+  favLayout: [],
+  fundCodes: [],
+  hotSource: 'zhihu'
 }
 
 const state = reactive<UIState>({ ...defaults })
@@ -66,9 +84,38 @@ export function useUI() {
     saveUI()
   }
 
+  // 保存常用页小组件顺序
+  function setFavWidgetOrder(order: string[]) {
+    state.favWidgetOrder = order
+    saveUI()
+  }
+
+  // 保存常用页二维布局(每项网格坐标)
+  function setFavLayout(layout: FavLayoutItem[]) {
+    state.favLayout = layout
+    saveUI()
+  }
+
+  // 保存自选基金代码列表
+  function setFundCodes(codes: string[]) {
+    state.fundCodes = codes
+    saveUI()
+  }
+
+  // 保存热榜默认源
+  function setHotSource(source: string) {
+    state.hotSource = source
+    saveUI()
+  }
+
   return {
     ui: state,
     loadUI,
-    setPanelPos
+    saveUI,
+    setPanelPos,
+    setFavWidgetOrder,
+    setFavLayout,
+    setFundCodes,
+    setHotSource
   }
 }

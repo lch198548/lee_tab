@@ -37,6 +37,9 @@
       <transition name="fade">
         <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
       </transition>
+
+      <!-- 全局应用内对话框(confirm/input,替代原生弹窗) -->
+      <AppDialogHost />
     </div>
   </div>
 </template>
@@ -45,9 +48,11 @@
 import { onMounted, reactive, computed } from 'vue'
 import LoginPage from '@/components/LoginPage.vue'
 import NavPage from '@/components/NavPage.vue'
+import AppDialogHost from '@/components/AppDialogHost.vue'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
 import { api } from '@/api'
+import { clearAllCache } from '@/utils/cache'
 
 const { state, loggedIn, loading } = useAppStore()
 const { backgroundLayerStyle, isVideoBg, backgroundVideoSrc, backgroundBlurPx, backgroundMaskAlpha } = useConfig()
@@ -91,6 +96,7 @@ onMounted(async () => {
     state.loggedIn = false
     state.config = null
     state.groups = []
+    clearAllCache()
   })
 })
 </script>

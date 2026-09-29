@@ -1,7 +1,8 @@
 // 图标 URL 工具:基于书签 URL 生成在线 favicon 服务地址
 
 const FAVICON_SERVICES = [
-  // 优先级:favicon.im(国内速度快) -> OneAPI(备用) -> 直接站点 favicon
+  // 优先级:服务端代理(边缘抓取 + Blob 缓存 7 天,国内最快) -> favicon.im -> OneAPI(备用) -> 直接站点 favicon
+  (domain: string) => `/api/favicon?u=${encodeURIComponent(domain)}`,
   (domain: string) => `https://a.favicon.im/${domain}`,
   (domain: string) => `https://favicon.cccyun.cc/${domain}`,
   (domain: string) => `https://${domain}/favicon.ico`

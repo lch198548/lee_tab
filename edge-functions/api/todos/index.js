@@ -8,13 +8,19 @@ import {
   shortId
 } from '../../_lib/kv.js'
 
+// GET /api/todos -> { todos, lists }
 export async function onRequestGet({ env }) {
   const kv = getKV(env)
   if (!kv) return errorResponse('Blob 存储未就绪', 500)
   const todos = await kvGetJSON(kv, 'todos', [])
-  return jsonResponse({ todos: Array.isArray(todos) ? todos : [] })
+  const lists = await kvGetJSON(kv, 'todo_lists', [])
+  return jsonResponse({
+    todos: Array.isArray(todos) ? todos : [],
+    lists: Array.isArray(lists) ? lists : []
+  })
 }
 
+// POST /api/todos { text, listId?, important? }
 export async function onRequestPost({ request, env }) {
   const kv = getKV(env)
   if (!kv) return errorResponse('Blob 存储未就绪', 500)
@@ -34,6 +40,8 @@ export async function onRequestPost({ request, env }) {
     id: shortId(),
     text,
     done: false,
+    important: !!body?.important,
+    listId: body?.listId || null,
     createdAt: Date.now(),
     completedAt: null
   }
@@ -42,6 +50,7 @@ export async function onRequestPost({ request, env }) {
   return jsonResponse({ ok: true, todo })
 }
 
+// PUT /api/todos/:id { text?, done?, important? }
 export async function onRequestPut({ request, env, params }) {
   const kv = getKV(env)
   if (!kv) return errorResponse('Blob 存储未就绪', 500)
@@ -63,6 +72,8 @@ export async function onRequestPut({ request, env, params }) {
     todos[idx].done = body.done
     todos[idx].completedAt = body.done ? Date.now() : null
   }
+  if (body.important !== undefined) todos[idx].important = !!body.important
+  if (body.listId !== undefined) todos[idx].listId = body.listId || null
 
   await kvPutJSON(kv, 'todos', todos)
   return jsonResponse({ ok: true })

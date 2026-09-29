@@ -6,80 +6,19 @@ export interface Engine {
   url: string
 }
 
-// 配色主题:每个字段对应一个 CSS 变量,可自由自定义
-export interface ThemeConfig {
-  id: string
-  name: string
-  // 基础
-  bgPage: string
-  bgCard: string
-  bgCardHover: string
-  bgGlass: string
-  bgGlassStrong: string
-  bgModal: string
-  bgInput: string
-  textPrimary: string
-  textSecondary: string
-  textMuted: string
-  borderColor: string
-  borderStrong: string
-  accent: string
-  accentHover: string
-  danger: string
-  success: string
-  warning: string
-  // 搜索框
-  searchBg: string
-  searchText: string
-  searchPlaceholder: string
-  searchBtnBg: string
-  searchBtnIcon: string
-  // 搜索 tab
-  searchTabDefaultBg: string
-  searchTabActiveBg: string
-  searchTabText: string
-  searchTabActiveText: string
-  // 书签分组标签
-  groupTabDefaultBg: string
-  groupTabActiveBg: string
-  groupTabText: string
-  groupTabActiveText: string
-  // 书签文字(无图标时文字颜色 / 通用文字)
-  bookmarkText: string
-  bookmarkFontSize: number
-  // 时间日期
-  timeColor: string
-  timeFontSize: number
-  dateColor: string
-  dateFontSize: number
-  // 顶部导航
-  topbarBg: string
-  topbarOpacity: number
-  // 图标
-  iconColor: string
-  iconSize: number
-  // 右侧分组切换
-  sidebarBg: string
-  sidebarDot: string
-  sidebarDotActive: string
-  sidebarArrow: string
-  sidebarText: string
-}
-
 export interface AppConfig {
   title: string
-  background: { type: 'color' | 'gradient' | 'image' | 'video'; value: string }
+  background: { type: 'color' | 'gradient' | 'image' | 'video' | 'bing'; value: string }
+  // bing 类型时 value 为空 = 每日一图自动更换;为 YYYYMMDD = 固定某天壁纸
   // 背景图/视频模糊值(px),仅对 image/video 类型生效
   backgroundBlur: number
   // 背景遮罩透明度(0-1),仅对 image/video 类型生效
   backgroundMask: number
-  // 当前配色主题 id(内置或自定义)
-  themeId?: string
-  // 自定义主题列表(内置主题为代码内预设)
-  customThemes?: ThemeConfig[]
   defaultEngine: string
   engines: Engine[]
   openInNewTab: boolean
+  // 功能插件开关(未设置的插件默认开启;key 见 src/plugins.ts 注册表)
+  plugins?: Record<string, boolean>
 }
 
 export interface Bookmark {
@@ -99,6 +38,8 @@ export interface Group {
   id: string
   name: string
   sort: number
+  // 分组图标(内置图标集的 id,如 'star'/'code';空 = 默认图标)
+  icon?: string
   bookmarks: Bookmark[]
 }
 
@@ -121,6 +62,97 @@ export interface Todo {
   done: boolean
   createdAt: number
   completedAt: number | null
+  important?: boolean
+  listId?: string | null
+}
+
+export interface TodoList {
+  id: string
+  name: string
+}
+
+// 基金实时穿透估值(持仓加权自行估算;官方盘中估值已按监管要求下线)
+export interface FundQuote {
+  code: string
+  name: string
+  est: number // 估算涨跌 %(无重仓数据时 = 昨日净值涨跌)
+  live: boolean // true = 持仓穿透估算 / false = 净值涨跌兜底
+  coverage: number // 重仓股合计占净值比例 %(估算覆盖度)
+  nav: string // 单位净值
+  navChg: number // 昨日净值涨跌 %
+  navDate: string // 净值日期
+  estTime: string // 估算时间 HH:MM
+  err?: boolean // 上游获取失败
+}
+
+// 热榜条目(热值为原始数值,展示时格式化为"xx 万")
+export interface HotItem {
+  title: string
+  url: string
+  hot: number | null
+}
+
+// 热榜源元数据(与后端 /api/hot 支持的 source 一致)
+export interface HotSourceMeta {
+  id: string
+  name: string
+}
+
+// 支持的热榜源(前端 tab / 磁贴默认源选择共用;与后端 /api/hot 的 source 一致)
+// 注:微博需登录态(匿名 403)、V2EX 境内直连超时,均不可用未收录
+export const HOT_SOURCES: HotSourceMeta[] = [
+  { id: 'douyin', name: '抖音' },
+  { id: 'zhihu', name: '知乎' },
+  { id: 'bilibili', name: 'B站' },
+  { id: 'baidu', name: '百度' },
+  { id: 'toutiao', name: '头条' },
+  { id: 'tieba', name: '贴吧' }
+]
+
+// 汇率数据(以 CNY 为基准:1 CNY = rates[币种] 外币)
+export interface RateInfo {
+  base: string
+  rates: Record<string, number>
+  updated: number // 数据更新时间(毫秒时间戳)
+  date: string // 汇率日期(YYYY-MM-DD)
+}
+
+// 磁贴/换算器展示的币种(unit = 展示时按多少单位外币折算,如日元按 100)
+export interface RateCurrencyMeta {
+  ccy: string
+  name: string
+  unit: number
+}
+
+export const RATE_CURRENCIES: RateCurrencyMeta[] = [
+  { ccy: 'USD', name: '美元', unit: 1 },
+  { ccy: 'EUR', name: '欧元', unit: 1 },
+  { ccy: 'JPY', name: '日元', unit: 100 },
+  { ccy: 'HKD', name: '港元', unit: 1 },
+  { ccy: 'GBP', name: '英镑', unit: 1 },
+  { ccy: 'KRW', name: '韩元', unit: 100 },
+  { ccy: 'SGD', name: '新加坡元', unit: 1 },
+  { ccy: 'AUD', name: '澳元', unit: 1 },
+  { ccy: 'CAD', name: '加元', unit: 1 },
+  { ccy: 'CHF', name: '瑞士法郎', unit: 1 },
+  { ccy: 'TWD', name: '新台币', unit: 1 },
+  { ccy: 'MOP', name: '澳门元', unit: 1 },
+  { ccy: 'THB', name: '泰铢', unit: 1 },
+  { ccy: 'MYR', name: '林吉特', unit: 1 },
+  { ccy: 'VND', name: '越南盾', unit: 100 },
+  { ccy: 'PHP', name: '菲律宾比索', unit: 1 },
+  { ccy: 'RUB', name: '卢布', unit: 1 },
+  { ccy: 'INR', name: '印度卢比', unit: 1 },
+  { ccy: 'NZD', name: '纽元', unit: 1 },
+  { ccy: 'CNY', name: '人民币', unit: 1 }
+]
+
+// 壁纸图库条目(多源统一结构;thumb 用于网格预览,url 为全尺寸原图)
+export interface WallpaperItem {
+  id: string
+  title: string
+  thumb: string
+  url: string
 }
 
 export interface GroupsResponse {
@@ -191,12 +223,12 @@ export const api = {
 
   // 分组
   getGroups: () => request<GroupsResponse>('/api/groups'),
-  createGroup: (name: string) =>
+  createGroup: (name: string, icon = '') =>
     request<{ ok: boolean; group: Group }>('/api/groups', {
       method: 'POST',
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, icon })
     }),
-  updateGroup: (id: string, payload: { name?: string; sort?: number; allSorts?: Array<{ id: string; sort: number }> }) =>
+  updateGroup: (id: string, payload: { name?: string; icon?: string; sort?: number; allSorts?: Array<{ id: string; sort: number }> }) =>
     request<{ ok: boolean }>(`/api/groups/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteGroup: (id: string) =>
     request<{ ok: boolean }>(`/api/groups/${id}`, { method: 'DELETE' }),
@@ -211,6 +243,12 @@ export const api = {
     request<{ ok: boolean; bookmarks: Bookmark[] }>(`/api/groups/${groupId}/bookmarks`, {
       method: 'PUT',
       body: JSON.stringify({ bookmarks })
+    }),
+  // 跨分组移动书签(后端单次原子写入)
+  moveBookmark: (fromGroupId: string, bookmarkId: string, toGroupId: string) =>
+    request<{ ok: boolean }>(`/api/groups/${fromGroupId}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ bookmarkId, toGroupId })
     }),
 
   // 便利贴
@@ -234,13 +272,13 @@ export const api = {
     }),
 
   // To-do List
-  getTodos: () => request<{ todos: Todo[] }>('/api/todos'),
-  createTodo: (text: string) =>
+  getTodos: () => request<{ todos: Todo[]; lists: TodoList[] }>('/api/todos'),
+  createTodo: (text: string, listId?: string | null, important = false) =>
     request<{ ok: boolean; todo: Todo }>('/api/todos', {
       method: 'POST',
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, listId: listId || null, important })
     }),
-  updateTodo: (id: string, payload: { text?: string; done?: boolean }) =>
+  updateTodo: (id: string, payload: { text?: string; done?: boolean; important?: boolean; listId?: string | null }) =>
     request<{ ok: boolean }>(`/api/todos/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload)
@@ -248,10 +286,45 @@ export const api = {
   deleteTodo: (id: string) =>
     request<{ ok: boolean }>(`/api/todos/${id}`, { method: 'DELETE' }),
 
+  // 清单
+  createTodoList: (name: string) =>
+    request<{ ok: boolean; list: TodoList }>('/api/todos/lists', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    }),
+  renameTodoList: (id: string, name: string) =>
+    request<{ ok: boolean }>(`/api/todos/lists?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name })
+    }),
+  deleteTodoList: (id: string) =>
+    request<{ ok: boolean }>(`/api/todos/lists?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  // 基金实时估值(服务端代理 + 60s 缓存)
+  getFunds: (codes: string[]) =>
+    request<{ funds: FundQuote[] }>(
+      `/api/fund?codes=${encodeURIComponent(codes.join(','))}`
+    ),
+
+  // 热榜聚合(服务端代理各源 + 10min 缓存;单源失败返回该源错误)
+  getHot: (source: string) =>
+    request<{ items: HotItem[]; updated: string }>(
+      `/api/hot?source=${encodeURIComponent(source)}`
+    ),
+
+  // 实时汇率(以 CNY 为基准,服务端代理 + 1h 缓存)
+  getRates: () => request<RateInfo>('/api/rate'),
+
   // UI 状态(面板位置等)
   getUIState: () => request<Record<string, unknown>>('/api/ui'),
   saveUIState: (state: Record<string, unknown>) =>
     request<{ ok: boolean }>('/api/ui', { method: 'PUT', body: JSON.stringify(state) }),
+
+  // 壁纸图库(多源元数据,图片前端直连;source: bing|picsum|wallhaven)
+  getWallpapers: (source: string, q = '', page = 1) =>
+    request<{ gallery: WallpaperItem[] }>(
+      `/api/wallpaper?source=${encodeURIComponent(source)}&q=${encodeURIComponent(q)}&page=${page}`
+    ),
 
   // 备份
   exportBackup: async (): Promise<string> => {

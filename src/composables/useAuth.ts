@@ -1,5 +1,6 @@
 import { api } from '@/api'
 import { useAppStore } from '@/stores/app'
+import { clearAllCache } from '@/utils/cache'
 
 export function useAuth() {
   const { state } = useAppStore()
@@ -27,6 +28,8 @@ export function useAuth() {
     state.loggedIn = false
     state.config = null
     state.groups = []
+    // 清除本地缓存,防止公用电脑上残留书签数据
+    clearAllCache()
   }
 
   return { checkLogin, login, logout }

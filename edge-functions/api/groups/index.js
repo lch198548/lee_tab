@@ -1,7 +1,7 @@
 import {
   getKV,
   getGroupsData,
-  saveGroupsData,
+  withGroupsMutation,
   jsonResponse,
   errorResponse,
   parseJSONBody,
@@ -17,7 +17,7 @@ export async function onRequestGet({ env }) {
   return jsonResponse({ groups })
 }
 
-// 新建分组
+// 新建分组(带乐观锁,冲突自动重试)
 export async function onRequestPost({ request, env }) {
   const kv = getKV(env)
   if (!kv) return errorResponse('Blob 存储未就绪', 500)
@@ -31,14 +31,14 @@ export async function onRequestPost({ request, env }) {
   const name = (body?.name || '').trim()
   if (!name) return errorResponse('分组名称不能为空', 400)
 
-  const groups = await getGroupsData(kv)
   const id = shortId()
-  const sort = groups.length
-  const newGroup = { id, name, sort, bookmarks: [] }
-  groups.push(newGroup)
+  const icon = typeof body?.icon === 'string' ? body.icon.slice(0, 32) : ''
+  const outcome = await withGroupsMutation(kv, (groups) => {
+    const newGroup = { id, name, icon, sort: groups.length, bookmarks: [] }
+    groups.push(newGroup)
+    return { group: newGroup }
+  })
 
-  await saveGroupsData(kv, groups)
-  return jsonResponse({ ok: true, group: newGroup })
+  if (outcome.conflict) return errorResponse('操作冲突,请刷新后重试', 409)
+  return jsonResponse({ ok: true, group: outcome.result.group })
 }
-
-// 分组删除/更新由 [id].js 处理

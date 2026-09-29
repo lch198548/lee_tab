@@ -57,9 +57,25 @@ export async function onRequestPut({ request, env, params }) {
   const noteId = params?.id
   const notes = await kvGetJSON(kv, 'notes', [])
 
-  // 全量保存(批量更新位置)
+  // 全量保存(批量更新位置),带结构校验,防止坏数据顶掉全部便签
   if (Array.isArray(body?.notes)) {
-    await kvPutJSON(kv, 'notes', body.notes)
+    const MAX_NOTES = 500
+    const cleaned = body.notes
+      .filter((n) => n && typeof n === 'object' && typeof n.id === 'string' && n.id)
+      .slice(0, MAX_NOTES)
+      .map((n) => ({
+        id: n.id,
+        content: typeof n.content === 'string' ? n.content : '',
+        bgColor: typeof n.bgColor === 'string' ? n.bgColor : '#fef08a',
+        textColor: typeof n.textColor === 'string' ? n.textColor : '#1e293b',
+        x: Number(n.x) || 0,
+        y: Number(n.y) || 0,
+        width: Number(n.width) || 200,
+        height: Number(n.height) || 180,
+        createdAt: Number(n.createdAt) || Date.now(),
+        updatedAt: Number(n.updatedAt) || Date.now()
+      }))
+    await kvPutJSON(kv, 'notes', cleaned)
     return jsonResponse({ ok: true })
   }
 

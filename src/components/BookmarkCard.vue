@@ -2,9 +2,10 @@
   <div
     class="bookmark-card"
     :class="{ favorite: bookmark.favorite }"
-    draggable="true"
+    :draggable="nativeDrag"
     @dragstart="onDragStart"
     @dragend="onDragEnd"
+    @contextmenu.prevent="openMenu"
   >
     <a
       :href="bookmark.url"
@@ -22,39 +23,67 @@
           referrerpolicy="no-referrer"
           @error="onIconError"
         />
-        <div v-else class="fallback-icon">{{ firstChar }}</div>
+        <div v-else class="fallback-icon" :style="{ background: fallbackBg }">{{ firstChar }}</div>
       </div>
       <div class="name" :title="bookmark.name">{{ bookmark.name }}</div>
     </a>
-    <div class="card-actions">
-      <button class="mini-btn" :title="bookmark.favorite ? '取消常用' : '设为常用'" @click.stop="onToggleFav">
-        <StarFilledIcon v-if="bookmark.favorite" />
-        <StarIcon v-else />
-      </button>
-      <button class="mini-btn" title="编辑" @click.stop="onEdit">
-        <EditIcon />
-      </button>
-      <button class="mini-btn danger" title="删除" @click.stop="onDelete">
-        <TrashIcon />
-      </button>
-    </div>
+
+    <!-- 右键菜单(Teleport 到 body,避免毛玻璃祖先劫持 fixed 定位) -->
+    <Teleport to="body">
+      <div v-if="menu" class="ctx-mask" @click="closeMenu" @contextmenu.prevent="closeMenu">
+        <div class="ctx-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+          <button class="ctx-item" @click="onToggleFav">
+            <StarFilledIcon v-if="bookmark.favorite" />
+            <StarIcon v-else />
+            {{ bookmark.favorite ? '取消常用' : '设为常用' }}
+          </button>
+          <button class="ctx-item" @click="onEdit">
+            <EditIcon /> 编辑
+          </button>
+          <button class="ctx-item danger" @click="onDelete">
+            <TrashIcon /> 删除
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Bookmark } from '@/api'
 import { EditIcon, TrashIcon, StarIcon, StarFilledIcon } from './icons'
 import { useAppStore } from '@/stores/app'
 import { useGroups } from '@/composables/useGroups'
 import { faviconUrl, nextFavicon } from '@/utils/favicon'
+import { useDialog } from '@/composables/useDialog'
 
-const props = defineProps<{ bookmark: Bookmark; groupId: string }>()
+const props = withDefaults(
+  defineProps<{ bookmark: Bookmark; groupId: string; nativeDrag?: boolean }>(),
+  { nativeDrag: true }
+)
 const { state } = useAppStore()
 const { saveBookmarks } = useGroups()
 
+const { confirm: dialogConfirm } = useDialog()
+
 const openInNewTab = computed(() => state.config?.openInNewTab ?? true)
 const firstChar = computed(() => props.bookmark.name?.[0]?.toUpperCase() || '?')
+
+// 无图标时的字母兜底:按域名哈希生成品牌色渐变,同站同色、不同站不同色
+const fallbackBg = computed(() => {
+  let host = ''
+  try {
+    host = new URL(props.bookmark.url).hostname
+  } catch {
+    host = props.bookmark.url || props.bookmark.name || ''
+  }
+  let hash = 0
+  for (let i = 0; i < host.length; i++) hash = (hash * 31 + host.charCodeAt(i)) >>> 0
+  const h = hash % 360
+  const h2 = (h + 42) % 360
+  return `linear-gradient(135deg, hsl(${h} 68% 56%), hsl(${h2} 68% 42%))`
+})
 
 // 优先使用自定义图标,否则走 favicon 服务
 const iconSrc = ref(props.bookmark.icon || faviconUrl(props.bookmark.url))
@@ -86,11 +115,6 @@ function onIconError() {
 // 跨分组拖动:记录源分组和书签 id,供顶部分组标签 drop 时移动
 const dragging = ref(false)
 function onDragStart(e: DragEvent) {
-  // 点击操作按钮时禁止启动拖拽(与 vuedraggable filter 保持一致)
-  if ((e.target as HTMLElement)?.closest?.('.card-actions')) {
-    e.preventDefault()
-    return
-  }
   if (!e.dataTransfer) return
   e.dataTransfer.effectAllowed = 'move'
   e.dataTransfer.setData(
@@ -110,11 +134,38 @@ function onClick() {
   saveBookmarks(props.groupId, state.groups.find((g) => g.id === props.groupId)?.bookmarks || []).catch(() => {})
 }
 
+// === 右键菜单 ===
+const menu = ref<{ x: number; y: string | number } | null>(null)
+
+function openMenu(e: MouseEvent) {
+  const MENU_W = 132
+  const MENU_H = 118
+  menu.value = {
+    x: Math.min(e.clientX, window.innerWidth - MENU_W - 8),
+    y: Math.min(e.clientY, window.innerHeight - MENU_H - 8)
+  }
+}
+
+function closeMenu() {
+  menu.value = null
+}
+
+function onGlobalClick(e: MouseEvent) {
+  if (menu.value && !(e.target as HTMLElement)?.closest?.('.ctx-menu')) {
+    menu.value = null
+  }
+}
+
+onMounted(() => window.addEventListener('click', onGlobalClick))
+onUnmounted(() => window.removeEventListener('click', onGlobalClick))
+
 function onEdit() {
+  closeMenu()
   ;(window as any).$openBookmarkEditor?.(props.groupId, props.bookmark)
 }
 
 async function onToggleFav() {
+  closeMenu()
   const g = state.groups.find((x) => x.id === props.groupId)
   if (!g) return
   const b = g.bookmarks.find((x) => x.id === props.bookmark.id)
@@ -129,7 +180,14 @@ async function onToggleFav() {
 }
 
 async function onDelete() {
-  if (!confirm(`删除书签「${props.bookmark.name}」?`)) return
+  closeMenu()
+  const ok = await dialogConfirm({
+    title: '删除书签',
+    message: `删除「${props.bookmark.name}」?此操作无法恢复。`,
+    confirmText: '删除',
+    danger: true
+  })
+  if (!ok) return
   const g = state.groups.find((x) => x.id === props.groupId)
   if (!g) return
   g.bookmarks = g.bookmarks.filter((b) => b.id !== props.bookmark.id)
@@ -157,20 +215,26 @@ async function onDelete() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 4px 2px;
+  gap: 4px;
+  padding: 8px 4px 6px;
   width: 100%;
   text-decoration: none;
   color: inherit;
   border-radius: var(--radius);
-  transition: var(--transition);
+  transition: 0.25s var(--ease);
+  will-change: transform;
 }
 
 .bookmark-card:hover .card-link {
-  background: var(--bg-card);
-  transform: translateY(-2px);
+  background: transparent;
+  transform: translateY(-4px);
 }
 
+.bookmark-card:active .card-link {
+  transform: translateY(-1px) scale(0.98);
+}
+
+/* 无边框图标:直接展示站点图标,hover 放大 + 投影 */
 .icon-wrap {
   position: relative;
   width: 64px;
@@ -178,38 +242,34 @@ async function onDelete() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  background: var(--bg-glass-strong);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  transition: var(--transition);
+  transition: 0.25s var(--ease);
 }
 
 .bookmark-card:hover .icon-wrap {
-  border-color: var(--accent);
-  box-shadow: 0 6px 20px rgba(96, 165, 250, 0.25);
+  transform: scale(1.08);
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.35));
 }
 
 .favicon {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   object-fit: contain;
-  padding: 2px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
 }
 
 .fallback-icon {
-  width: 100%;
-  height: 100%;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--bg-glass-strong);
+  color: #fff;
+  border-radius: 14px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
 }
 
 .name {
@@ -224,46 +284,62 @@ async function onDelete() {
   font-weight: 500;
 }
 
-.card-actions {
+/* 右键菜单(与侧边栏菜单同风格) */
+.ctx-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.ctx-menu {
+  position: fixed;
+  min-width: 132px;
+  background: var(--bg-modal);
+  backdrop-filter: blur(32px) saturate(1.7);
+  -webkit-backdrop-filter: blur(32px) saturate(1.7);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
   display: flex;
+  flex-direction: column;
   gap: 2px;
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  opacity: 0;
-  transition: var(--transition);
-  background: var(--bg-glass-strong);
-  backdrop-filter: blur(10px);
-  border-radius: 6px;
-  padding: 2px;
+  animation: ctxIn 0.12s var(--ease);
 }
 
-.bookmark-card:hover .card-actions {
-  opacity: 1;
+@keyframes ctxIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.mini-btn {
-  width: 22px;
-  height: 22px;
+.ctx-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: var(--text-secondary);
-}
-
-.mini-btn:hover {
-  background: var(--bg-card-hover);
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
   color: var(--text-primary);
+  cursor: pointer;
+  transition: 0.12s ease;
+  white-space: nowrap;
 }
 
-.mini-btn.danger:hover {
+.ctx-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.ctx-item.danger {
   color: var(--danger);
 }
 
-.mini-btn svg {
-  width: 13px;
-  height: 13px;
+.ctx-item.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.ctx-item svg {
+  width: 14px;
+  height: 14px;
 }
 
 @media (max-width: 640px) {
@@ -272,10 +348,12 @@ async function onDelete() {
     height: 48px;
   }
   .favicon {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
   }
   .fallback-icon {
+    width: 40px;
+    height: 40px;
     font-size: 18px;
   }
   .name {

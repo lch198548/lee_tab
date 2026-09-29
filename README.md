@@ -4,13 +4,15 @@
 
 ## 特性
 
-- 书签管理(分组、拖拽排序、点击计数)
+- 书签管理(分组、拖拽排序、点击计数、跨分组原子移动)
 - 多搜索引擎切换(百度/Google/Bing/知乎/B站/GitHub,可自定义)
 - 主题切换(深色/浅色/跟随系统)
-- 背景自定义(纯色/渐变/图片)
-- 单密码登录(Cookie + Token 鉴权,强一致校验)
-- 图标自动获取(Google s2 / favicon.cccyun.cc / 站点 favicon 三级兜底)
+- 背景自定义(纯色/渐变/图片/**必应每日一图**/视频,图库走边缘代理缓存)
+- Infinity 风格视觉底座(宽松网格 + 卡片 hover 浮起动效)
+- 单密码登录(Cookie + Token 鉴权,SHA-256 哈希存储,失败 5 次锁定 15 分钟)
+- 图标自动获取(服务端代理 + Blob 缓存 7 天,多级兜底)
 - 数据导入导出(JSON 备份)
+- PWA 离线支持(静态资源 Service Worker 缓存,/api 不缓存)
 
 ## 技术栈
 
@@ -43,7 +45,11 @@
 │       ├── groups/
 │       │   ├── index.js             # GET 列出/POST 新建
 │       │   ├── [id].js              # PUT 更新/DELETE 删除
-│       │   └── [id]/bookmarks.js   # POST 添加/PUT 全量替换
+│       │   └── [id]/{bookmarks,move}.js  # 书签增改/跨分组原子移动
+│       ├── notes/                   # 便利贴
+│       ├── todos/                   # 待办
+│       ├── ui/                      # UI 状态
+│       ├── favicon.js               # 站点图标代理(边缘抓取 + Blob 缓存)
 │       ├── config.js               # GET/PUT 全局配置
 │       ├── backup.js               # GET 导出/POST 导入
 │       └── health.js               # 健康检查
@@ -140,6 +146,11 @@ edgeone makers deploy
 | DELETE | /api/groups/:id | 删除分组(含书签) | ✓ |
 | POST | /api/groups/:id/bookmarks | 添加书签到分组 | ✓ |
 | PUT | /api/groups/:id/bookmarks | 全量替换分组书签数组(用于排序、修改) | ✓ |
+| POST | /api/groups/:id/move | 跨分组移动书签(单次原子写入,带乐观锁) | ✓ |
+| GET | /api/favicon?u=域名 | 站点图标代理(边缘抓取 + Blob 缓存 7 天) | ✓ |
+| GET | /api/wallpaper | 必应壁纸图库 JSON(最近 8 天);带 `?u=` 时为通用图片代理 | ✓ |
+| GET | /api/wallpaper/daily | 今日必应每日一图(边缘抓取 + Blob 缓存) | ✓ |
+| GET | /api/wallpaper/image?d=日期 | 指定日期必应壁纸(Blob 缓存 7 天) | ✓ |
 | GET | /api/backup | 导出全部数据 JSON | ✓ |
 | POST | /api/backup | 导入 JSON 覆盖现有数据 | ✓ |
 
@@ -150,12 +161,18 @@ edgeone makers deploy
 | Key | 类型 | 说明 |
 |---|---|---|
 | `config` | JSON 字符串 | 全局配置(标题/背景/主题/搜索引擎等) |
-| `auth_password` | JSON 字符串 | 登录密码的 SHA-256 哈希 |
+| `auth_password` | JSON 字符串 | 登录密码的 SHA-256 哈希(旧 base64 格式登录成功时自动迁移) |
+| `login_guard` | JSON 字符串 | 登录失败计数与锁定时间(防爆破) |
 | `token_<32hex>` | JSON 字符串 | 登录 token(7 天 TTL) |
-| `groups_index` | JSON 字符串 | 分组索引 `[{id,name,sort}]` |
-| `group_<id>` | JSON 字符串 | 单个分组对象,含 bookmarks 数组 |
+| `nav_groups` | JSON 字符串 | 全部分组及书签 `{ groups, rev }`,rev 为乐观锁版本号 |
+| `notes` | JSON 字符串 | 便利贴数组 |
+| `todos` | JSON 字符串 | 待办数组(含 `important` 重要标记、`listId` 所属清单) |
+| `todo_lists` | JSON 字符串 | 待办清单数组 `[{id, name}]`,删除清单时其下待办自动移回默认 |
+| `ui_state` | JSON 字符串 | 面板位置等 UI 状态 |
+| `favicon_<host>` | JSON 字符串 | 站点图标缓存(base64 + Content-Type + 抓取时间,7 天 TTL) |
 
 所有读写均使用 `consistency: "strong"` 强一致模式,确保登录 token 校验、密码修改等立即生效。
+分组数据写入统一走乐观锁(读 → 改 → 校验 rev → 写,冲突自动重试 3 次),避免多窗口并发覆盖丢数据。
 
 ## 关键限制注意
 
@@ -168,8 +185,10 @@ edgeone makers deploy
 ## 故障排查
 
 ### 登录后立刻又跳回登录页
-- 检查 Cookie 是否被浏览器拦截(HttpOnly + SameSite=Strict 在某些跨域场景下需要 SameSite=Lax)
+- v1.1 已修复:token 现为同步落盘后再返回响应,不再出现竞态
+- 若仍复现:检查 Cookie 是否被浏览器拦截(HttpOnly + SameSite=Strict 在某些跨域场景下需要 SameSite=Lax)
 - 检查 Blob 是否就绪:访问 `/api/health`,确认 `storageReady: true`、`storageType: "blob"`
+- 连续输错密码 5 次会触发 15 分钟锁定,期间返回 429
 
 ### 部署后访问 /api/health 返回 `storageReady: false`
 - 检查 `package.json` 的 `dependencies` 是否包含 `@edgeone/pages-blob`
@@ -177,8 +196,8 @@ edgeone makers deploy
 - 检查 `edge-functions/_lib/kv.js` 第 10 行 `import { getStore } from '@edgeone/pages-blob'` 是否被正确解析
 
 ### 跨分组拖拽后书签丢失
-- 代码已遍历保存所有受影响分组,但仍可能因并发写入被覆盖,刷新页面即可恢复
+- v1.1 已修复:移动书签改为后端单次原子写入,分组数据写入带乐观锁(rev 版本号,冲突自动重试)
 
 ### 图标显示空白
 - 部分网站无 favicon,会显示书签名称首字母占位,属正常现象
-- 国内访问 Google s2 服务可能慢,代码已配置多级兜底
+- 图标已改为服务端代理(`/api/favicon`,边缘抓取 + Blob 缓存 7 天),国内访问速度稳定;失败时前端自动降级到 favicon.im / cccyun / 站点直连

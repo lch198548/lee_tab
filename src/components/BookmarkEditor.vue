@@ -1,6 +1,6 @@
 <template>
   <div class="modal-mask" @click.self="$emit('close')">
-    <div class="modal">
+    <div class="modal modal-skin">
       <header class="modal-header">
         <h3>{{ bookmark ? '编辑书签' : '添加书签' }}</h3>
         <button class="icon-btn" @click="$emit('close')"><CloseIcon /></button>
@@ -157,6 +157,8 @@ async function onSave() {
   width: 100%;
   max-width: 480px;
   background: var(--bg-modal);
+  backdrop-filter: blur(36px) saturate(1.7);
+  -webkit-backdrop-filter: blur(36px) saturate(1.7);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   display: flex;

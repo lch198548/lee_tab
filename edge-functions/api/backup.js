@@ -4,6 +4,7 @@ import {
   kvPutJSON,
   getGroupsData,
   saveGroupsData,
+  shortId,
   jsonResponse,
   errorResponse,
   parseJSONBody
@@ -53,13 +54,27 @@ export async function onRequestPost({ request, env }) {
     await kvPutJSON(kv, 'config', body.config)
   }
 
-  // 写入分组及书签(单 Blob)
-  const groups = body.groups.map((g, i) => ({
-    id: g.id || Math.random().toString(36).slice(2, 10),
-    name: g.name || '未命名',
-    sort: typeof g.sort === 'number' ? g.sort : i,
-    bookmarks: Array.isArray(g.bookmarks) ? g.bookmarks : []
-  }))
+  // 写入分组及书签(单 Blob),逐项清洗防坏数据
+  const groups = body.groups
+    .filter((g) => g && typeof g === 'object')
+    .map((g, i) => ({
+      id: typeof g.id === 'string' && g.id ? g.id : shortId(),
+      name: (g.name || '未命名').toString().slice(0, 100),
+      sort: typeof g.sort === 'number' ? g.sort : i,
+      bookmarks: (Array.isArray(g.bookmarks) ? g.bookmarks : [])
+        .filter((b) => b && typeof b === 'object')
+        .map((b) => ({
+          id: typeof b.id === 'string' && b.id ? b.id : shortId(),
+          name: (b.name || '').toString(),
+          url: (b.url || '').toString(),
+          icon: (b.icon || '').toString(),
+          desc: (b.desc || '').toString(),
+          sort: typeof b.sort === 'number' ? b.sort : 0,
+          clicks: Number(b.clicks) || 0,
+          createdAt: Number(b.createdAt) || Date.now(),
+          favorite: !!b.favorite
+        }))
+    }))
   await saveGroupsData(kv, groups)
 
   return jsonResponse({ ok: true, count: groups.length })

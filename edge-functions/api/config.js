@@ -47,7 +47,12 @@ export async function onRequestPut({ request, env }) {
   } catch (e) {
     return errorResponse('请求体格式错误: ' + e.message, 400)
   }
-  // 整体替换 config
-  await kvPutJSON(kv, 'config', body)
+  if (!body || typeof body !== 'object') {
+    return errorResponse('配置必须是对象', 400)
+  }
+  // 与现有配置合并:旧版前端未提交的新字段不会被丢失
+  const existing = await kvGetJSON(kv, 'config', {})
+  const merged = { ...(existing && typeof existing === 'object' ? existing : {}), ...body }
+  await kvPutJSON(kv, 'config', merged)
   return jsonResponse({ ok: true })
 }

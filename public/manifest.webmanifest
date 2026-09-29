@@ -1,0 +1,19 @@
+{
+  "name": "个人导航",
+  "short_name": "导航",
+  "description": "私人导航页 - 书签 / 便签 / 待办",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1f2937",
+  "theme_color": "#1f2937",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

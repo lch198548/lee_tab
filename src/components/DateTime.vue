@@ -52,7 +52,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 20px;
   color: var(--time-color);
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
   user-select: none;
@@ -60,11 +60,11 @@ onUnmounted(() => {
 
 .time {
   font-size: var(--time-font-size);
-  font-weight: 200;
+  font-weight: 400;
   line-height: 1;
   letter-spacing: 2px;
   font-variant-numeric: tabular-nums;
-  color: var(--time-color);
+  color: #ffffff;
 }
 
 .date {
@@ -72,7 +72,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: var(--date-font-size);
-  color: var(--date-color);
+  color: #ffffff;
   font-weight: 400;
 }
 

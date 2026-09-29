@@ -112,10 +112,24 @@ async function onSubmit() {
   width: 100%;
   max-width: 360px;
   background: var(--bg-modal);
+  backdrop-filter: blur(36px) saturate(1.7);
+  -webkit-backdrop-filter: blur(36px) saturate(1.7);
   border-radius: var(--radius);
   padding: 36px 28px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border-color);
+  animation: cardIn 0.35s var(--ease);
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .logo {

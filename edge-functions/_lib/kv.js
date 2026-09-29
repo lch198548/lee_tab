@@ -1,11 +1,6 @@
 // Edge Functions 共享工具库(基于 EdgeOne Makers Blob 存储)
 // 注意:V8 运行时,不可使用 Node 内置模块(fs/path/Buffer/process)
 // 仅可使用 Web 标准 API + @edgeone/pages-blob SDK
-//
-// 与 KV 版本的区别:
-// 1. Blob 不需要在控制台绑定命名空间,首次 getStore() 时自动创建
-// 2. Blob 支持强一致模式(consistency: "strong"),登录 token 立即生效
-// 3. Key 可包含任意字符(包括 /),但本项目仍保留纯字母+下划线格式以兼容旧数据
 
 import { getStore } from '@edgeone/pages-blob'
 
@@ -30,47 +25,32 @@ export function getKV(_env) {
   const store = getStoreInstance()
   if (!store) return null
   return {
-    // 写入:Blob.set 接收 string/ArrayBuffer/Blob/ReadableStream
-    // 我们统一存 JSON 字符串,与 KV 行为一致
     async put(key, value) {
       await store.set(key, typeof value === 'string' ? value : String(value))
     },
-    // 读取:type 支持 text/json/arrayBuffer/stream,与 KV 兼容(Blob 多一个 blob 类型)
     async get(key, options = {}) {
       const type = options.type || (typeof options === 'string' ? options : 'text')
       return await store.get(key, { type })
     },
     async delete(key) {
       await store.delete(key)
-    },
-    // 列举:适配 KV 的 ListResult 结构 { complete, cursor, keys:[{key}] }
-    async list(options = {}) {
-      const res = await store.list({
-        prefix: options.prefix,
-        cursor: options.cursor,
-        paginate: false // 单页模式,便于适配 KV 接口
-      })
-      return {
-        complete: !res.cursor,
-        cursor: res.cursor || null,
-        keys: (res.blobs || []).map((b) => ({ key: b.key }))
-      }
     }
   }
 }
 
-// === 以下工具函数与原 KV 版本完全一致,业务代码无需改动 ===
+// === 密码处理 ===
+// 统一使用 SHA-256 哈希存储(crypto.subtle 开销极低,远在 200ms CPU 限制内)
+// 旧版 base64 可逆格式在登录成功时自动迁移为 SHA-256(无感升级)
 
-// 密码编码:使用 base64 + 简单加盐混淆
-// 不使用 SHA-256(会消耗大量 CPU,Edge Functions 有 200ms 限制)
-// 单人使用场景下 base64 已足够防止明文存储
-const SALT = 'nav_personal_2026'
-
-export function encodePassword(text) {
-  // 先加 salt 再 base64,防止简单反查
-  return btoa(unescape(encodeURIComponent(SALT + ':' + text)))
+export async function sha256(text) {
+  const data = new TextEncoder().encode(text)
+  const hash = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
+// 解码旧版 base64 格式密码(仅用于迁移校验)
 export function decodePassword(encoded) {
   try {
     const decoded = decodeURIComponent(escape(atob(encoded)))
@@ -82,14 +62,7 @@ export function decodePassword(encoded) {
   }
 }
 
-// 兼容旧版 SHA-256 密码(如果用户之前已设置过)
-export async function sha256(text) {
-  const data = new TextEncoder().encode(text)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
+// === 通用工具 ===
 
 // 生成随机 token(32 字节 hex)
 export function randomToken() {
@@ -138,16 +111,6 @@ export function jsonResponse(data, init = {}) {
 // 错误响应
 export function errorResponse(message, status = 400) {
   return jsonResponse({ error: message }, { status })
-}
-
-// CORS 头(同源部署一般用不到,联调时方便)
-export function withCorsHeaders(headers = {}) {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    ...headers
-  }
 }
 
 // 解析 JSON body,带大小限制(Edge Functions body 上限 1MB)
@@ -204,21 +167,50 @@ export async function kvPutJSON(kv, key, value) {
   await kv.put(key, JSON.stringify(value))
 }
 
-// === 分组数据辅助函数(单 Blob 替代 N+1 次读取) ===
+// === 二进制工具(base64 编解码,供 favicon / wallpaper 代理共用) ===
 
-// 获取全部分组及书签,自动从旧格式(groups_index + group_{id})迁移
-export async function getGroupsData(kv) {
-  if (!kv) return []
-  // 优先读取新格式(单 Blob)
+export function bytesToBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+export function base64ToBytes(b64) {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+// 图片字节响应(统一 Cache-Control,浏览器侧缓存 6 小时)
+export function imageResponse(data, contentType, maxAge = 21600) {
+  return new Response(base64ToBytes(data), {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': `public, max-age=${maxAge}`
+    }
+  })
+}
+
+// === 分组数据辅助函数(单 Blob + 乐观锁) ===
+
+// 读取全部分组文档 { groups, rev }
+// rev 为版本号,每次写入 +1,用于乐观锁防并发覆盖
+export async function getGroupsDoc(kv) {
+  if (!kv) return { groups: [], rev: 0 }
   const data = await kvGetJSON(kv, 'nav_groups', null)
   if (data && Array.isArray(data.groups)) {
-    return data.groups
+    return { groups: data.groups, rev: Number(data.rev) || 0 }
   }
 
-  // 迁移:从旧格式读取
+  // 迁移:从旧格式(groups_index + group_{id})读取
   const groupsIndex = await kvGetJSON(kv, 'groups_index', [])
   if (!Array.isArray(groupsIndex) || groupsIndex.length === 0) {
-    return []
+    return { groups: [], rev: 0 }
   }
 
   groupsIndex.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
@@ -235,13 +227,51 @@ export async function getGroupsData(kv) {
     })
   )
 
-  // 写入新格式
-  await kvPutJSON(kv, 'nav_groups', { groups })
-  return groups
+  await saveGroupsData(kv, groups, undefined, 0)
+  return { groups, rev: 0 }
+}
+
+// 兼容接口:仅取分组数组
+export async function getGroupsData(kv) {
+  const doc = await getGroupsDoc(kv)
+  return doc.groups
 }
 
 // 保存全部分组及书签(单 Blob 写入)
-export async function saveGroupsData(kv, groups) {
+// expectedRev 传入时启用乐观锁:当前版本不匹配则抛出 conflict 错误
+export async function saveGroupsData(kv, groups, expectedRev, baseRev) {
   if (!kv) throw new Error('Blob 存储未就绪')
-  await kvPutJSON(kv, 'nav_groups', { groups })
+  if (expectedRev !== undefined) {
+    const cur = await kvGetJSON(kv, 'nav_groups', null)
+    const curRev = cur && Number.isFinite(cur.rev) ? cur.rev : 0
+    if (curRev !== expectedRev) {
+      const err = new Error('数据已被其他窗口修改,请刷新重试')
+      err.conflict = true
+      throw err
+    }
+  }
+  const nextRev = (baseRev ?? expectedRev ?? 0) + 1
+  await kvPutJSON(kv, 'nav_groups', { groups, rev: nextRev })
+}
+
+// 分组数据原子变更:读 → 变更 → 带乐观锁写,冲突自动重试(最多 3 次)
+// mutator(groups) 直接原地修改 groups 数组:
+//   - 分组不存在时返回 { notFound: true }
+//   - 正常时返回任意结果(将透传给调用方)
+export async function withGroupsMutation(kv, mutator) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const doc = await getGroupsDoc(kv)
+    const result = mutator(doc.groups)
+    if (result && result.notFound) {
+      return { ok: false, notFound: true }
+    }
+    try {
+      await saveGroupsData(kv, doc.groups, doc.rev)
+      return { ok: true, result }
+    } catch (e) {
+      if (e && e.conflict) continue // 并发冲突,重读重试
+      throw e
+    }
+  }
+  return { ok: false, conflict: true }
 }
