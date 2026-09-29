@@ -803,8 +803,10 @@ async function handleRequest(req, res) {
       return errorResponse(res, '图标获取失败', 404)
     }
 
-    // === 基金实时穿透估值(内存缓存:结果 60s / 静态资料 7 天) ===
-    // 公式:est = (Σ 占比×个股涨跌 / Σ 占比) × 股票仓位占比;无持仓回退昨日净值涨跌
+    // === 基金实时穿透估值(内存缓存:结果 60s / 持仓资料 7 天) ===
+    // v2:主源 = 东财 F10 全量持仓(fundf10,半年报/年报披露,覆盖度 90%+)
+    //     est = Σ(占净值% × 个股涨跌%) / 100,未覆盖部分(现金/债券)按 0
+    // v1 兜底:季报前十大(FundMNInverstPosition) est = 加权平均涨跌 × 股票仓位
     if (path === '/api/fund' && method === 'GET') {
       const raw = url.searchParams.get('codes') || ''
       const codes = [...new Set(raw.split(',').map((c) => c.trim()).filter((c) => /^\d{6}$/.test(c)))].slice(0, 20)
@@ -829,7 +831,7 @@ async function handleRequest(req, res) {
         }
       }
 
-      // GPDM + 交易所标记 -> secid;债券/转债等非股票返回空
+      // GPDM + 交易所标记 -> secid(v1 兜底用);债券/转债等非股票返回空
       // NEWTEXCH(推荐,东财市场码:1=沪 0=深 116=港) / TEXCH(1=沪 2=深 5/3=港)
       function secidOf(gpdm, texch, newTexch) {
         const code = String(gpdm || '').trim()
@@ -841,8 +843,95 @@ async function handleRequest(req, res) {
         return ''
       }
 
-      // 静态资料(季报,7 天缓存):重仓股 + 股票仓位占比;空结果不缓存(下次重试)
+      const F10_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+
+      // F10 持仓代码 -> 腾讯行情 secid(1=沪 0=深 116=港);无法定价的(美股/债券等)返回空跳过
+      function f10Secid(code) {
+        if (/^\d{6}$/.test(code)) {
+          const p = code[0]
+          if (p === '6') return '1.' + code
+          if (p === '0' || p === '3') return '0.' + code
+          return ''
+        }
+        if (/^\d{5}$/.test(code)) return '116.' + code
+        return ''
+      }
+
+      // 解析 F10 响应(var apidata={content:"<html>"}) -> [{quarter, rows:[{secid,weight}]}]
+      // 行结构(去标签后): 序号|代码|名称|变动详情|股吧|行情|占净值比%|...
+      function parseF10Boxes(text) {
+        const boxes = []
+        for (const chunk of text.split('boxitem').slice(1)) {
+          const qM = chunk.match(/(\d{4}年[1-4]季度)/)
+          const rows = []
+          for (const tr of chunk.match(/<tr[\s\S]*?<\/tr>/g) || []) {
+            const cells = tr
+              .replace(/<[^>]+>/g, '|')
+              .replace(/&nbsp;/g, ' ')
+              .split('|')
+              .map((s) => s.trim())
+              .filter(Boolean)
+            if (cells.length < 3) continue
+            const secid = f10Secid(cells[1] || '')
+            const wM = cells.map((c) => c.match(/^(\d+(?:\.\d+)?)%$/)).find(Boolean)
+            if (!secid || !wM) continue
+            const weight = parseFloat(wM[1])
+            if (weight > 0) rows.push({ secid, weight })
+          }
+          if (rows.length > 0) boxes.push({ quarter: qM ? qM[1] : '', rows })
+        }
+        return boxes
+      }
+
+      // F10 全量持仓:依次尝试 (年,月) 组合,取最新一期 rows>=20 的全量披露(半年报/年报);
+      // 都找不到时退回最新一期(季报前十大)。注意不带 month 参数时只返回季报前十大。
+      async function fetchF10(code) {
+        const y = new Date().getFullYear()
+        const tries = [
+          [y, 9],
+          [y, 6],
+          [y, 3],
+          [y - 1, 12],
+          [y - 1, 6]
+        ]
+        let firstTop10 = null
+        for (const [yy, mm] of tries) {
+          let text = ''
+          try {
+            const r = await fetch(
+              `https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=${code}&topline=200&year=${yy}&month=${mm}`,
+              { signal: AbortSignal.timeout(10000), headers: { 'User-Agent': F10_UA, Referer: `https://fundf10.eastmoney.com/ccmx_${code}.html` } }
+            )
+            if (r.ok) text = await r.text()
+          } catch {
+            // 尝试下一期
+          }
+          const boxes = text ? parseF10Boxes(text) : []
+          if (boxes.length === 0) continue
+          if (firstTop10 === null) firstTop10 = boxes[0]
+          const full = boxes.find((b) => b.rows.length >= 20)
+          if (full) return { source: 'f10', holdings: full.rows, quarter: full.quarter }
+        }
+        if (firstTop10) return { source: 'f10', holdings: firstTop10.rows, quarter: firstTop10.quarter }
+        return null
+      }
+
+      // 持仓资料(7 天缓存):v2 = F10 全量持仓;失败兜底 v1 季报前十大。空结果不缓存(下次重试)
       async function getStatic(code) {
+        // 1) F10 全量持仓
+        const f10Key = `f10_${code}`
+        const f10Cached = fundCache.get(f10Key)
+        if (f10Cached && Array.isArray(f10Cached.holdings) && f10Cached.holdings.length > 0 && now - f10Cached.t < 7 * 24 * 60 * 60 * 1000) {
+          return f10Cached
+        }
+        const f10 = await fetchF10(code).catch(() => null)
+        if (f10 && f10.holdings.length > 0) {
+          const rec = { ...f10, t: now }
+          fundCache.set(f10Key, rec)
+          return rec
+        }
+
+        // 2) 兜底:季报前十大 + 股票仓位
         const key = `static_${code}`
         const cached = fundCache.get(key)
         if (cached && Array.isArray(cached.holdings) && now - cached.t < 7 * 24 * 60 * 60 * 1000) return cached
@@ -867,12 +956,12 @@ async function handleRequest(req, res) {
           const gp = latest ? parseFloat(latest.GP) : NaN
           if (Number.isFinite(gp) && gp > 0) stockRatio = gp / 100
         }
-        const rec = { holdings, stockRatio, t: now }
+        const rec = { source: 'top10', holdings, stockRatio, t: now }
         if (holdings.length > 0 && stockRatio !== null) fundCache.set(key, rec)
         return rec
       }
 
-      // 腾讯行情(qt.gtimg.cn):push2 会拒绝 undici TLS 指纹(UND_ERR_SOCKET)故用腾讯源。
+      // 腾讯行情(qt.gtimg.cn,分批每 50 只):push2 会拒绝 undici TLS 指纹(UND_ERR_SOCKET)故用腾讯源。
       // GBK 编码只解析 ASCII 数值;gbk 解码器不可用回退 latin1。A 股涨跌 = f[32],港股由现价/昨收算。
       async function fetchQuotes(secids) {
         const map = new Map()
@@ -881,31 +970,37 @@ async function handleRequest(req, res) {
           const [mkt, code] = s.split('.')
           return (mkt === '1' ? 'sh' : mkt === '0' ? 'sz' : 'hk') + code
         })
-        try {
-          const r = await fetch(`https://qt.gtimg.cn/q=${symbols.join(',')}`, timeoutOpt())
-          if (!r.ok) return map
-          const buf = await r.arrayBuffer()
-          let text
-          try {
-            text = new TextDecoder('gbk').decode(buf)
-          } catch {
-            text = new TextDecoder('latin1').decode(buf)
-          }
-          for (const line of text.split(';')) {
-            const m = line.match(/v_(sh|sz|hk)(\d+)="([^"]*)"/)
-            if (!m) continue
-            const f = m[3].split('~')
-            let pct = parseFloat(f[32])
-            if (m[1] === 'hk' || !Number.isFinite(pct)) {
-              const price = parseFloat(f[3])
-              const prev = parseFloat(f[4])
-              if (Number.isFinite(price) && Number.isFinite(prev) && prev > 0) pct = ((price - prev) / prev) * 100
+        const chunks = []
+        for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50))
+        await Promise.all(
+          chunks.map(async (chunk) => {
+            try {
+              const r = await fetch(`https://qt.gtimg.cn/q=${chunk.join(',')}`, timeoutOpt())
+              if (!r.ok) return
+              const buf = await r.arrayBuffer()
+              let text
+              try {
+                text = new TextDecoder('gbk').decode(buf)
+              } catch {
+                text = new TextDecoder('latin1').decode(buf)
+              }
+              for (const line of text.split(';')) {
+                const m = line.match(/v_(sh|sz|hk)(\d+)="([^"]*)"/)
+                if (!m) continue
+                const f = m[3].split('~')
+                let pct = parseFloat(f[32])
+                if (m[1] === 'hk' || !Number.isFinite(pct)) {
+                  const price = parseFloat(f[3])
+                  const prev = parseFloat(f[4])
+                  if (Number.isFinite(price) && Number.isFinite(prev) && prev > 0) pct = ((price - prev) / prev) * 100
+                }
+                if (Number.isFinite(pct)) map.set(m[2], pct)
+              }
+            } catch (e) {
+              // 单批失败忽略,用已拉到的
             }
-            if (Number.isFinite(pct)) map.set(m[2], pct)
-          }
-        } catch (e) {
-          console.error('[fund] quotes err', e && e.message)
-        }
+          })
+        )
         return map
       }
 
@@ -937,7 +1032,8 @@ async function handleRequest(req, res) {
             results.set(code, { code, name: code, est: 0, live: false, coverage: 0, nav: '', navChg: 0, navDate: '', estTime, err: true, t: now })
             return
           }
-          const { holdings, stockRatio } = statics.get(code) || { holdings: [], stockRatio: null }
+          const stat = statics.get(code) || {}
+          const holdings = stat.holdings || []
           let wSum = 0
           let vSum = 0
           for (const h of holdings) {
@@ -946,11 +1042,21 @@ async function handleRequest(req, res) {
             wSum += h.weight
             vSum += h.weight * q
           }
-          const stockAvg = wSum > 0 ? vSum / wSum : null
-          const live = stockAvg !== null && stockRatio !== null && stockRatio > 0
+          // v2(f10 全量): est = Σ(占净值% × 涨跌%) / 100
+          // v1(top10 兜底): est = 重仓股平均涨跌 × 股票仓位占比
+          let live
+          let est
+          if (stat.source === 'f10') {
+            live = wSum > 0
+            est = live ? vSum / 100 : base.navChg
+          } else {
+            const stockAvg = wSum > 0 ? vSum / wSum : null
+            live = stockAvg !== null && stat.stockRatio !== null && stat.stockRatio > 0
+            est = live ? stockAvg * stat.stockRatio : base.navChg
+          }
           const rec = {
             ...base,
-            est: live ? Math.round(stockAvg * stockRatio * 100) / 100 : base.navChg,
+            est: Math.round(est * 100) / 100,
             live,
             coverage: Math.round(wSum * 100) / 100,
             estTime,
