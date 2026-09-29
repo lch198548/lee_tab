@@ -71,23 +71,6 @@ export interface TodoList {
   name: string
 }
 
-// 基金实时穿透估值(持仓加权自行估算;官方盘中估值已按监管要求下线)
-export interface FundQuote {
-  code: string
-  name: string
-  est: number // 估算涨跌 %(无重仓数据时 = 昨日净值涨跌)
-  live: boolean // true = 持仓穿透估算 / false = 净值涨跌兜底
-  coverage: number // 重仓股合计占净值比例 %(估算覆盖度)
-  nav: string // 单位净值
-  navChg: number // 昨日净值涨跌 %
-  navDate: string // 净值日期
-  estTime: string // 估算时间 HH:MM
-  src?: 'f10' | 'top10' | 'etf' | 'feeder' // 估值来源:f10 = 全量持仓 / top10 = 季报前十大(降级) / etf = 场内自身价格 / feeder = 联接映射 ETF 价格
-  quarter?: string // 持仓披露期,如 "2026年2季度"
-  holds?: number // 实际取到行情的持仓股票数(诊断用)
-  err?: boolean // 上游获取失败
-}
-
 // 热榜条目(热值为原始数值,展示时格式化为"xx 万")
 export interface HotItem {
   title: string
@@ -302,12 +285,6 @@ export const api = {
     }),
   deleteTodoList: (id: string) =>
     request<{ ok: boolean }>(`/api/todos/lists?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
-
-  // 基金实时估值(服务端代理 + 60s 缓存)
-  getFunds: (codes: string[]) =>
-    request<{ funds: FundQuote[] }>(
-      `/api/fund?codes=${encodeURIComponent(codes.join(','))}`
-    ),
 
   // 热榜聚合(服务端代理各源 + 10min 缓存;单源失败返回该源错误)
   getHot: (source: string) =>

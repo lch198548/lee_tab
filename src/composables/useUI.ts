@@ -16,8 +16,6 @@ export interface UIState {
   favWidgetOrder: string[]
   // 常用页二维自由布局(每项的网格坐标,允许空洞;旧版字符串数组会按顺序自动排布)
   favLayout: FavLayoutItem[]
-  // 基金插件:用户自选基金代码列表
-  fundCodes: string[]
   // 热榜插件:默认展示的热榜源 id(见后端 /api/hot 支持的源)
   hotSource: string
 }
@@ -30,7 +28,6 @@ const defaults: UIState = {
   todoPanelY: 12,   // 距顶 12%
   favWidgetOrder: ['todo', 'notepad'],
   favLayout: [],
-  fundCodes: [],
   hotSource: 'zhihu'
 }
 
@@ -96,12 +93,6 @@ export function useUI() {
     saveUI()
   }
 
-  // 保存自选基金代码列表
-  function setFundCodes(codes: string[]) {
-    state.fundCodes = codes
-    saveUI()
-  }
-
   // 保存热榜默认源
   function setHotSource(source: string) {
     state.hotSource = source
@@ -115,7 +106,6 @@ export function useUI() {
     setPanelPos,
     setFavWidgetOrder,
     setFavLayout,
-    setFundCodes,
     setHotSource
   }
 }

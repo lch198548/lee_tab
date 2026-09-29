@@ -6,7 +6,7 @@
 
 import type { Component } from 'vue'
 import type { AppConfig } from '@/api'
-import { ClipboardIcon, ExchangeIcon, FlameIcon, NoteIcon, TrendingUpIcon } from '@/components/icons'
+import { ClipboardIcon, ExchangeIcon, FlameIcon, NoteIcon } from '@/components/icons'
 
 export interface PluginMeta {
   id: string
@@ -27,12 +27,6 @@ export const PLUGINS: PluginMeta[] = [
     name: '记事本',
     desc: '常用页记事本小组件与全屏管理弹窗',
     icon: NoteIcon
-  },
-  {
-    id: 'fund',
-    name: '基金估值',
-    desc: '常用页基金实时估值磁贴,支持多只自选基金同屏',
-    icon: TrendingUpIcon
   },
   {
     id: 'hot',

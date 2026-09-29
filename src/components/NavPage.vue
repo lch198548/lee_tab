@@ -117,9 +117,6 @@
     <!-- 待办管理弹窗(常用页小组件点击打开) -->
     <TodoModal v-if="todoOpen" @close="todoOpen = false" />
 
-    <!-- 基金管理弹窗 -->
-    <FundModal v-if="fundOpen" @close="fundOpen = false" />
-
     <!-- 热榜聚合弹窗 -->
     <HotModal v-if="hotOpen" @close="hotOpen = false" />
 
@@ -151,12 +148,10 @@ import SettingsPanel from './SettingsPanel.vue'
 import BookmarkEditor from './BookmarkEditor.vue'
 import TodoWidget from './TodoWidget.vue'
 import NotesWidget from './NotesWidget.vue'
-import FundWidget from './FundWidget.vue'
 import HotWidget from './HotWidget.vue'
 import RateWidget from './RateWidget.vue'
 import NotesModal from './NotesModal.vue'
 import TodoModal from './TodoModal.vue'
-import FundModal from './FundModal.vue'
 import HotModal from './HotModal.vue'
 import RateModal from './RateModal.vue'
 import { PlusIcon, LayoutIcon } from './icons'
@@ -182,14 +177,12 @@ const { loadUI, setFavLayout, ui } = useUI()
 // 弹窗开关
 const todoOpen = ref(false)
 const notesOpen = ref(false)
-const fundOpen = ref(false)
 const hotOpen = ref(false)
 const rateOpen = ref(false)
 
 // 小组件点击打开对应管理弹窗
 function onWidgetOpen(id: string) {
   if (id === 'todo') todoOpen.value = true
-  else if (id === 'fund') fundOpen.value = true
   else if (id === 'hot') hotOpen.value = true
   else if (id === 'rate') rateOpen.value = true
   else notesOpen.value = true
@@ -263,7 +256,6 @@ interface FavItem {
 const WIDGET_COMPONENTS: Record<string, Component> = {
   todo: TodoWidget,
   notepad: NotesWidget,
-  fund: FundWidget,
   hot: HotWidget,
   rate: RateWidget
 }
@@ -273,7 +265,6 @@ const WIDGET_COMPONENTS: Record<string, Component> = {
 const WIDGET_SPECS: Record<string, { w: number; h: number }> = {
   todo: { w: 3, h: 2 },
   notepad: { w: 3, h: 2 },
-  fund: { w: 3, h: 2 },
   hot: { w: 4, h: 2 },
   rate: { w: 3, h: 2 }
 }
@@ -582,7 +573,7 @@ let wheelAccum = 0
 const WHEEL_THRESHOLD = 80
 function onWheel(e: WheelEvent) {
   // 任一弹窗/抽屉打开时不切换分组(Teleport 弹窗不在 .modal 选择器覆盖内,统一用状态守卫)
-  if (state.settingsOpen || todoOpen.value || notesOpen.value || fundOpen.value || hotOpen.value || rateOpen.value || editor.open) return
+  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || editor.open) return
   const target = e.target as HTMLElement
   if (
     target?.closest?.('.card-actions') ||
@@ -613,7 +604,7 @@ function onWheel(e: WheelEvent) {
 function onKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-  if (state.settingsOpen || todoOpen.value || notesOpen.value || fundOpen.value || hotOpen.value || rateOpen.value || editor.open) return
+  if (state.settingsOpen || todoOpen.value || notesOpen.value || hotOpen.value || rateOpen.value || editor.open) return
   if (e.key === 'ArrowLeft') switchTo(currentIndex.value - 1)
   else if (e.key === 'ArrowRight') switchTo(currentIndex.value + 1)
 }
