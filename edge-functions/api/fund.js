@@ -4,11 +4,13 @@
 //
 // v2(当前):主源 = 东财 F10 全量持仓
 //   1. 全量持仓(半年报/年报披露,覆盖度 90%+)  -> fundf10.eastmoney.com FundArchivesDatas(type=jjcc)
-//   2. 持仓股实时行情涨跌幅                     -> qt.gtimg.cn(腾讯)
-//   3. 估算涨跌 est = Σ(占净值% × 个股涨跌%)     (未覆盖的现金/债券部分按 0 涨跌)
-// v1(兜底):F10 失败时回退季报前十大
-//   est = (Σ 占比×涨跌 / Σ 占比) × 股票仓位占比(FundMNInverstPosition + FundMNAssetAllocationNew)
+//   2. 股票仓位(资产配置最新期)                -> FundMNAssetAllocationNew
+//   3. 持仓股实时行情涨跌幅                     -> qt.gtimg.cn(腾讯)
+//   4. 估算涨跌 est = 持仓股平均涨跌 × 股票仓位
+//      (统一仓位加权:全量持仓时 ≈ Σ(占净值×涨跌);上游缩水/前十大时幅度依然正确)
+// v1(兜底):F10 失败时回退季报前十大(FundMNInverstPosition),公式相同
 // 无持仓/无股票仓位(纯债/货币/QDII)时回退为昨日净值涨跌。
+// 注意:东财 F10 对同一 URL 会间歇性返回缩水内容(74只->20/10只),故多期尝试取最全一份。
 // 缓存:最终结果 60s / 持仓资料 7 天;需登录(全局中间件保证)。
 import { getKV, kvGetJSON, kvPutJSON, jsonResponse, errorResponse } from '../_lib/kv.js'
 
@@ -66,8 +68,9 @@ function parseF10Boxes(text) {
   return boxes
 }
 
-// F10 全量持仓:依次尝试 (年,月) 组合,取最新一期 rows>=20 的全量披露(半年报/年报);
-// 都找不到时退回最新一期(季报前十大)。注意不带 month 参数时只返回季报前十大。
+// F10 全量持仓:依次尝试 (年,月) 组合,取行数最多的一份。
+// 实测东财对同一 URL 会间歇性返回缩水内容(全量 74 只 -> 缩成 20/10 只,疑似限流),
+// 故遍历所有候选期取最全;行数 >=60 视为明确全量提前结束。不带 month 只返回季报前十大。
 async function fetchF10(code) {
   const y = new Date().getFullYear()
   const tries = [
@@ -77,7 +80,7 @@ async function fetchF10(code) {
     [y - 1, 12],
     [y - 1, 6]
   ]
-  let firstTop10 = null
+  let best = null
   for (const [yy, mm] of tries) {
     let text = ''
     try {
@@ -89,14 +92,12 @@ async function fetchF10(code) {
     } catch {
       /* 尝试下一期 */
     }
-    const boxes = text ? parseF10Boxes(text) : []
-    if (boxes.length === 0) continue
-    if (firstTop10 === null) firstTop10 = boxes[0]
-    const full = boxes.find((b) => b.rows.length >= 20)
-    if (full) return { source: 'f10', holdings: full.rows, quarter: full.quarter }
+    for (const b of text ? parseF10Boxes(text) : []) {
+      if (!best || b.rows.length > best.rows.length) best = b
+    }
+    if (best && best.rows.length >= 60) break
   }
-  if (firstTop10) return { source: 'f10', holdings: firstTop10.rows, quarter: firstTop10.quarter }
-  return null
+  return best ? { source: 'f10', holdings: best.rows, quarter: best.quarter } : null
 }
 
 // GPDM 股票代码 + 交易所标记 -> 内部 secid(v1 兜底用)
@@ -130,18 +131,35 @@ async function fetchFundBase(code) {
   }
 }
 
-// 持仓资料(7 天缓存):v2 = F10 全量持仓;失败兜底 v1 季报前十大。空结果不缓存(下次重试)
+// 股票占净值比例(资产配置最新期 GP/100)。全量持仓缩水时,靠它保证估算幅度正确
+async function fetchStockRatio(code) {
+  const res = await fetch(`${MOBILE_BASE}/FundMNAssetAllocationNew?FCODE=${code}&${MOBILE_QS}`, timeoutOpt(8000)).catch(() => null)
+  if (res && res.ok) {
+    const data = await res.json().catch(() => null)
+    const latest = data && Array.isArray(data.Datas) ? data.Datas[0] : null
+    const gp = latest ? parseFloat(latest.GP) : NaN
+    if (Number.isFinite(gp) && gp > 0) return gp / 100
+  }
+  return null
+}
+
+// 持仓资料(7 天缓存):v2 = F10 全量持仓(取最全一份)+ 股票仓位;失败兜底 v1 季报前十大。
+// 空结果不缓存(下次重试);旧版无 stockRatio 的缓存视为无效(强制刷新)
 async function getStatic(kv, code) {
   // 1) F10 全量持仓
   const f10Key = `fund_f10_${code}`
   const f10Cached = await kvGetJSON(kv, f10Key, null)
-  if (f10Cached && Array.isArray(f10Cached.holdings) && f10Cached.holdings.length > 0 && Date.now() - (f10Cached.t || 0) < STATIC_TTL) {
-    return f10Cached
-  }
-  const f10 = await fetchF10(code).catch(() => null)
+  const f10Valid =
+    f10Cached && Array.isArray(f10Cached.holdings) && f10Cached.holdings.length > 0 && typeof f10Cached.stockRatio === 'number' && Date.now() - (f10Cached.t || 0) < (f10Cached.ttl || STATIC_TTL)
+  if (f10Valid) return f10Cached
+  const [f10, stockRatio] = await Promise.all([fetchF10(code).catch(() => null), fetchStockRatio(code)])
   if (f10 && f10.holdings.length > 0) {
-    const rec = { ...f10, t: Date.now() }
-    await kvPutJSON(kv, f10Key, rec).catch(() => {})
+    // 缩水数据(<30 只)只缓存 6h,到期自动重试抓全量;全量缓存 7 天
+    const ttl = f10.holdings.length < 30 ? 6 * 60 * 60 * 1000 : STATIC_TTL
+    const rec = { ...f10, stockRatio: stockRatio ?? NaN, t: Date.now(), ttl }
+    if (stockRatio !== null) {
+      await kvPutJSON(kv, f10Key, rec).catch(() => {})
+    }
     return rec
   }
 
@@ -151,10 +169,7 @@ async function getStatic(kv, code) {
   if (cached && Array.isArray(cached.holdings) && Date.now() - (cached.t || 0) < STATIC_TTL) {
     return cached
   }
-  const [posRes, assetRes] = await Promise.all([
-    fetch(`${MOBILE_BASE}/FundMNInverstPosition?FCODE=${code}&${MOBILE_QS}`, timeoutOpt(8000)).catch(() => null),
-    fetch(`${MOBILE_BASE}/FundMNAssetAllocationNew?FCODE=${code}&${MOBILE_QS}`, timeoutOpt(8000)).catch(() => null)
-  ])
+  const posRes = await fetch(`${MOBILE_BASE}/FundMNInverstPosition?FCODE=${code}&${MOBILE_QS}`, timeoutOpt(8000)).catch(() => null)
 
   let holdings = []
   if (posRes && posRes.ok) {
@@ -167,15 +182,7 @@ async function getStatic(kv, code) {
     }
   }
 
-  let stockRatio = null // 股票占净值比例(0-1)
-  if (assetRes && assetRes.ok) {
-    const data = await assetRes.json().catch(() => null)
-    const latest = data && Array.isArray(data.Datas) ? data.Datas[0] : null
-    const gp = latest ? parseFloat(latest.GP) : NaN
-    if (Number.isFinite(gp) && gp > 0) stockRatio = gp / 100
-  }
-
-  const rec = { source: 'top10', holdings, stockRatio, t: Date.now() }
+  const rec = { source: 'top10', holdings, stockRatio: stockRatio ?? NaN, t: Date.now() }
   if (holdings.length > 0 && stockRatio !== null) {
     await kvPutJSON(kv, key, rec)
   }
@@ -272,9 +279,8 @@ export async function onRequestGet({ request, env }) {
   // 3. 一次批量拉所有持仓股行情
   const quoteMap = await fetchQuotes([...secids])
 
-  // 4. 穿透估算
-  //    v2(f10 全量): est = Σ(占净值% × 涨跌%) / 100
-  //    v1(前十大兜底): est = 重仓股平均涨跌 × 股票仓位占比
+  // 4. 穿透估算:统一仓位加权公式 est = 持仓股平均涨跌 × 股票仓位
+  //    全量持仓时数学上 ≈ Σ(占净值×涨跌);持仓缩水/前十大时幅度依然正确(不低估)
   await Promise.all(
     pending.map(async (code) => {
       const base = bases.get(code)
@@ -292,21 +298,19 @@ export async function onRequestGet({ request, env }) {
         wSum += h.weight
         vSum += h.weight * q
       }
-      let live
-      let est
-      if (stat.source === 'f10') {
-        live = wSum > 0
-        est = live ? vSum / 100 : base.navChg
-      } else {
-        const stockAvg = wSum > 0 ? vSum / wSum : null
-        live = stockAvg !== null && stat.stockRatio !== null && stat.stockRatio > 0
-        est = live ? stockAvg * stat.stockRatio : base.navChg
-      }
+      const stockAvg = wSum > 0 ? vSum / wSum : null
+      // 股票仓位:优先资产配置接口;缺失时假设 = 已覆盖权重(全量持仓时二者相等)
+      const gp = stat.stockRatio != null && Number.isFinite(stat.stockRatio) && stat.stockRatio > 0 ? stat.stockRatio : wSum / 100
+      const live = stockAvg !== null && gp > 0
+      // 诊断字段:估值来源与持仓期,前端展示徽标用于定位降级
       const rec = {
         ...base,
-        est: round2(est),
+        est: round2(live ? stockAvg * gp : base.navChg),
         live,
         coverage: round2(wSum),
+        src: stat.source || 'top10',
+        quarter: stat.quarter || '',
+        holds: holdings.filter((h) => quoteMap.has(h.secid.split('.').pop())).length,
         estTime,
         t: now
       }

@@ -82,6 +82,9 @@ export interface FundQuote {
   navChg: number // 昨日净值涨跌 %
   navDate: string // 净值日期
   estTime: string // 估算时间 HH:MM
+  src?: 'f10' | 'top10' // 估值来源:f10 = 全量持仓 / top10 = 季报前十大(降级)
+  quarter?: string // 持仓披露期,如 "2026年2季度"
+  holds?: number // 实际取到行情的持仓股票数(诊断用)
   err?: boolean // 上游获取失败
 }
 

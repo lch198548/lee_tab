@@ -25,6 +25,7 @@
             <div v-for="c in codes" :key="c" class="fm-row">
               <span class="fm-code">{{ c }}</span>
               <span class="fm-name" :title="quoteOf(c)?.name">{{ quoteOf(c)?.name || '获取中…' }}</span>
+              <span class="fm-src" :class="{ degrade: quoteOf(c)?.src === 'top10' }" :title="srcTitle(quoteOf(c))">{{ srcLabel(quoteOf(c)) }}</span>
               <span class="fm-pct" :class="pctClass(quoteOf(c))">{{ quoteOf(c) ? fmtPct(quoteOf(c)!.est) : '' }}</span>
               <button class="fm-del" title="移除" @click="onRemove(c)"><TrashIcon /></button>
             </div>
@@ -67,6 +68,17 @@ function pctClass(q?: FundQuote) {
 function fmtPct(v: number) {
   const n = Number.isFinite(v) ? v : 0
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+// 估值来源徽标:f10 全量持仓为正常;top10 表示已降级到季报前十大(精度差)
+function srcLabel(q?: FundQuote) {
+  if (!q || q.err) return '—'
+  if (q.src === 'f10') return `${q.holds ?? ''}只·${q.quarter || '全量'}`
+  return '前十大'
+}
+function srcTitle(q?: FundQuote) {
+  if (!q) return ''
+  if (q.src === 'f10') return `基于${q.quarter || '最新'}全量公示持仓穿透估算,参与估算 ${q.holds ?? 0} 只股票,覆盖 ${q.coverage}% 净值`
+  return '已降级:全量持仓获取失败,仅用季报前十大重仓股估算,精度较低'
 }
 
 async function refresh() {
@@ -311,6 +323,23 @@ onUnmounted(() => window.removeEventListener('keydown', onEscKey))
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+}
+
+/* 估值来源徽标 */
+.fm-src {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.fm-src.degrade {
+  background: color-mix(in srgb, #e67e22 15%, transparent);
+  color: #d35400;
 }
 
 .fm-pct.up {

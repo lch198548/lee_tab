@@ -77,7 +77,8 @@ function fmtPct(v: number) {
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
 }
 function rowTitle(f: FundQuote) {
-  return `${f.name}(${f.code}) 估算 ${fmtPct(f.est)} · 昨日净值 ${fmtPct(f.navChg)}(${f.navDate})`
+  const src = f.src === 'f10' ? `全量${f.holds ?? ''}只·${f.quarter || ''}` : '已降级:季报前十大'
+  return `${f.name}(${f.code}) 估算 ${fmtPct(f.est)} [${src}] · 昨日净值 ${fmtPct(f.navChg)}(${f.navDate})`
 }
 
 async function refresh() {
