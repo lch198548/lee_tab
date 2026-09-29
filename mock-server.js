@@ -804,8 +804,9 @@ async function handleRequest(req, res) {
     }
 
     // === 基金实时穿透估值(内存缓存:结果 60s / 持仓资料 7 天) ===
-    // v2:主源 = 东财 F10 全量持仓(fundf10,半年报/年报披露,覆盖度 90%+;上游会间歇性缩水,多期尝试取最全)
-    // 统一仓位加权公式:est = 持仓股平均涨跌 × 股票仓位(资产配置 GP);缩水/前十大时幅度依然正确
+    // v3 三路估算:场内 ETF 用自身价格(src=etf);ETF 联接映射目标 ETF 用其场内涨跌×仓位(src=feeder);
+    // 普通基金 F10 全量持仓穿透(src=f10),失败兜底季报前十大(src=top10)。
+    // 统一仓位加权公式:est = 持仓股平均涨跌 × 股票仓位;缩水/前十大时幅度依然正确
     if (path === '/api/fund' && method === 'GET') {
       const raw = url.searchParams.get('codes') || ''
       const codes = [...new Set(raw.split(',').map((c) => c.trim()).filter((c) => /^\d{6}$/.test(c)))].slice(0, 20)
@@ -929,6 +930,75 @@ async function handleRequest(req, res) {
         return null
       }
 
+      // 场内基金代码 -> 腾讯行情 secid(ETF/LOF 自身盘中交易,价格涨跌即最准实时估值)
+      // 深市:15/16 开头;沪市:50/51/56/58(含 588) 开头
+      function etfSecidOf(code) {
+        if (/^(15|16)\d{4}$/.test(code)) return '0.' + code
+        if (/^(50|51|56|58)\d{4}$/.test(code)) return '1.' + code
+        return ''
+      }
+
+      // 联接基金 -> 目标 ETF:fundsuggest 搜索 + 字符命中率评分。
+      // 联接基金 90%+ 净值买目标 ETF 份额,F10 股票穿透天然失效(覆盖仅 2~3%),必须映射到 ETF 本尊。
+      // 搜索链:①原名去联接后缀(如"华夏中证电网设备主题ETF") ②再去掉指数品牌词
+      //   (如"华夏电网设备ETF",搜索分词匹配不到全名时兜底,实测命中)
+      async function searchETF(key) {
+        try {
+          const r = await fetch(`https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(key)}`, {
+            signal: AbortSignal.timeout(8000),
+            headers: { 'User-Agent': F10_UA, Referer: 'https://fund.eastmoney.com/' }
+          })
+          if (!r.ok) return null
+          const j = await r.json().catch(() => null)
+          const list = (j && j.Datas) || []
+          const chars = [...new Set(key)]
+          let best = null
+          let bestScore = 0
+          for (const d of list) {
+            const cname = String(d.NAME || '')
+            if (!cname.includes('ETF') || cname.includes('联接')) continue
+            if (!etfSecidOf(String(d.CODE || ''))) continue
+            let hit = 0
+            for (const ch of chars) if (cname.includes(ch)) hit++
+            const score = hit / chars.length
+            if (score > bestScore) {
+              bestScore = score
+              best = d
+            }
+          }
+          if (!best || bestScore < 0.5) return null
+          return { code: String(best.CODE), name: String(best.NAME) }
+        } catch {
+          return null
+        }
+      }
+
+      async function findTargetETF(name) {
+        const stripped = String(name || '')
+          .replace(/[ABC]{1,2}(类)?份额?$/, '')
+          .replace(/(发起式)?联接(基金)?$/, '')
+          .trim()
+        if (!stripped) return null
+        const key2 = stripped.replace(/中证|国证|上证|深证|恒生|沪港深|A股|主题|指数/g, '')
+        for (const key of [...new Set([stripped, key2])]) {
+          const hit = await searchETF(key)
+          if (hit) return hit
+        }
+        return null
+      }
+
+      // 联接映射(7 天缓存)
+      async function getFeeder(code, name) {
+        const key = `feeder_${code}`
+        const cached = fundCache.get(key)
+        if (cached && cached.secid && now - cached.t < 7 * 24 * 60 * 60 * 1000) return cached
+        const etf = await findTargetETF(name)
+        if (!etf) return null
+        const rec = { etfCode: etf.code, etfName: etf.name, secid: etfSecidOf(etf.code), t: now }
+        fundCache.set(key, rec)
+        return rec
+      }
+
       // 持仓资料(7 天缓存):v2 = F10 全量持仓(取最全一份)+ 股票仓位;失败兜底 v1 季报前十大。
       // 空结果不缓存(下次重试);旧版无 stockRatio 的缓存视为无效(强制刷新)
       async function getStatic(code) {
@@ -1023,10 +1093,35 @@ async function handleRequest(req, res) {
       const secids = new Set()
       await Promise.all(
         pending.map(async (code) => {
-          const [base, stat] = await Promise.all([fetchFundBase(code), getStatic(code)])
+          const base = await fetchFundBase(code)
           bases.set(code, base)
+          if (!base) {
+            statics.set(code, { holdings: [] })
+            return
+          }
+          // a) 场内 ETF/LOF:自身价格即实时估值
+          const self = etfSecidOf(code)
+          if (self) {
+            statics.set(code, { source: 'etf', holdings: [{ secid: self, weight: 100 }], stockRatio: 1, quarter: '' })
+            secids.add(self)
+            return
+          }
+          // b) ETF 联接基金:映射目标 ETF,用 ETF 场内涨跌 × 仓位估算
+          if (/联接/.test(base.name)) {
+            const feeder = await getFeeder(code, base.name)
+            if (feeder) {
+              // 仓位:资产配置 GP 若 >50% 视为含 ETF 仓位可用;否则(新基金未披露/只披露直持股票)用默认 90%
+              const gp = await fetchStockRatio(code).catch(() => null)
+              const ratio = gp && gp > 0.5 ? gp : 0.9
+              statics.set(code, { source: 'feeder', holdings: [{ secid: feeder.secid, weight: ratio * 100 }], stockRatio: ratio, quarter: '', feederName: feeder.etfName })
+              secids.add(feeder.secid)
+              return
+            }
+          }
+          // c) 普通基金:F10 全量持仓穿透
+          const stat = await getStatic(code)
           statics.set(code, stat)
-          for (const h of stat.holdings) secids.add(h.secid)
+          for (const h of stat.holdings || []) secids.add(h.secid)
         })
       )
       const quoteMap = await fetchQuotes([...secids])

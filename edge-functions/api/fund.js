@@ -1,17 +1,17 @@
-// GET /api/fund?codes=161725,005827 -> 基金实时穿透估值 + 多级缓存 (v2)
+// GET /api/fund?codes=161725,005827 -> 基金实时穿透估值 + 多级缓存 (v3)
 //
 // 背景:官方盘中估值接口(fundgz / GSZ 字段)已按监管要求下线,本接口自行估算。
 //
-// v2(当前):主源 = 东财 F10 全量持仓
-//   1. 全量持仓(半年报/年报披露,覆盖度 90%+)  -> fundf10.eastmoney.com FundArchivesDatas(type=jjcc)
-//   2. 股票仓位(资产配置最新期)                -> FundMNAssetAllocationNew
-//   3. 持仓股实时行情涨跌幅                     -> qt.gtimg.cn(腾讯)
-//   4. 估算涨跌 est = 持仓股平均涨跌 × 股票仓位
-//      (统一仓位加权:全量持仓时 ≈ Σ(占净值×涨跌);上游缩水/前十大时幅度依然正确)
-// v1(兜底):F10 失败时回退季报前十大(FundMNInverstPosition),公式相同
+// 按基金类型三路估算:
+//   1. 场内 ETF/LOF(代码 15/16/50/51/56/58 开头):自身场内价格涨跌即实时估值,src='etf'
+//   2. ETF 联接基金(名称含"联接"):F10 股票穿透失效(直持股票仅 2~3%),映射目标 ETF 后
+//      用 ETF 场内涨跌 × 仓位(资产配置 GP,缺失默认 0.9)估算,src='feeder'
+//   3. 普通基金:东财 F10 全量持仓穿透,src='f10';失败兜底季报前十大,src='top10'
+//      est = 持仓股平均涨跌 × 股票仓位(统一仓位加权:全量持仓时 ≈ Σ(占净值×涨跌);
+//      上游缩水/前十大时幅度依然正确)
 // 无持仓/无股票仓位(纯债/货币/QDII)时回退为昨日净值涨跌。
 // 注意:东财 F10 对同一 URL 会间歇性返回缩水内容(74只->20/10只),故多期尝试取最全一份。
-// 缓存:最终结果 60s / 持仓资料 7 天;需登录(全局中间件保证)。
+// 缓存:最终结果 60s / 持仓与联接映射 7 天;需登录(全局中间件保证)。
 import { getKV, kvGetJSON, kvPutJSON, jsonResponse, errorResponse } from '../_lib/kv.js'
 
 const EST_TTL = 60 * 1000
@@ -111,6 +111,75 @@ function secidOf(gpdm, texch, newTexch) {
   if (t === '0') return `0.${code}`
   if (t === '116' || t === '5' || t === '3') return `116.${code}`
   return ''
+}
+
+// 场内基金代码 -> 腾讯行情 secid(ETF/LOF 自身盘中交易,价格涨跌即最准实时估值)
+// 深市:15/16 开头;沪市:50/51/56/58(含 588) 开头
+function etfSecidOf(code) {
+  if (/^(15|16)\d{4}$/.test(code)) return '0.' + code
+  if (/^(50|51|56|58)\d{4}$/.test(code)) return '1.' + code
+  return ''
+}
+
+// 联接基金 -> 目标 ETF:fundsuggest 搜索 + 字符命中率评分。
+// 联接基金 90%+ 净值买目标 ETF 份额,F10 股票穿透天然失效(覆盖仅 2~3%),必须映射到 ETF 本尊。
+// 搜索链:①原名去联接后缀(如"华夏中证电网设备主题ETF") ②再去掉指数品牌词
+//   (如"华夏电网设备ETF",搜索分词匹配不到全名时兜底,实测命中)
+async function searchETF(key) {
+  try {
+    const res = await fetch(
+      `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(key)}`,
+      { ...timeoutOpt(8000), headers: { 'User-Agent': F10_UA, Referer: 'https://fund.eastmoney.com/' } }
+    )
+    if (!res.ok) return null
+    const j = await res.json().catch(() => null)
+    const list = (j && j.Datas) || []
+    const chars = [...new Set(key)]
+    let best = null
+    let bestScore = 0
+    for (const d of list) {
+      const cname = String(d.NAME || '')
+      if (!cname.includes('ETF') || cname.includes('联接')) continue
+      if (!etfSecidOf(String(d.CODE || ''))) continue
+      let hit = 0
+      for (const ch of chars) if (cname.includes(ch)) hit++
+      const score = hit / chars.length
+      if (score > bestScore) {
+        bestScore = score
+        best = d
+      }
+    }
+    if (!best || bestScore < 0.5) return null
+    return { code: String(best.CODE), name: String(best.NAME) }
+  } catch {
+    return null
+  }
+}
+
+async function findTargetETF(name) {
+  const stripped = String(name || '')
+    .replace(/[ABC]{1,2}(类)?份额?$/, '')
+    .replace(/(发起式)?联接(基金)?$/, '')
+    .trim()
+  if (!stripped) return null
+  const key2 = stripped.replace(/中证|国证|上证|深证|恒生|沪港深|A股|主题|指数/g, '')
+  for (const key of [...new Set([stripped, key2])]) {
+    const hit = await searchETF(key)
+    if (hit) return hit
+  }
+  return null
+}
+
+// 联接映射(7 天缓存)
+async function getFeeder(kv, code, name) {
+  const key = `fund_feeder_${code}`
+  const cached = await kvGetJSON(kv, key, null)
+  if (cached && cached.secid && Date.now() - (cached.t || 0) < STATIC_TTL) return cached
+  const etf = await findTargetETF(name)
+  if (!etf) return null
+  const rec = { etfCode: etf.code, etfName: etf.name, secid: etfSecidOf(etf.code), t: Date.now() }
+  await kvPutJSON(kv, key, rec).catch(() => {})
+  return rec
 }
 
 // 基金基本信息(名称/净值/昨日涨跌)
@@ -263,14 +332,39 @@ export async function onRequestGet({ request, env }) {
     }
   }
 
-  // 2. 未命中的:基本信息 + 持仓资料(7 天缓存)
+  // 2. 未命中的:基本信息 -> 分类(场内ETF/联接基金/普通基金) -> 对应资料
   const bases = new Map()
   const statics = new Map()
   const secids = new Set()
   await Promise.all(
     pending.map(async (code) => {
-      const [base, stat] = await Promise.all([fetchFundBase(code), getStatic(kv, code)])
+      const base = await fetchFundBase(code)
       bases.set(code, base)
+      if (!base) {
+        statics.set(code, {})
+        return
+      }
+      // a) 场内 ETF/LOF:自身价格即实时估值
+      const self = etfSecidOf(code)
+      if (self) {
+        statics.set(code, { source: 'etf', holdings: [{ secid: self, weight: 100 }], stockRatio: 1, quarter: '' })
+        secids.add(self)
+        return
+      }
+      // b) ETF 联接基金:映射目标 ETF,用 ETF 场内涨跌 × 仓位估算
+      if (/联接/.test(base.name)) {
+        const feeder = await getFeeder(kv, code, base.name)
+        if (feeder) {
+          // 仓位:资产配置 GP 若 >50% 视为含 ETF 仓位可用;否则(新基金未披露/只披露直持股票)用默认 90%
+          const gp = await fetchStockRatio(code).catch(() => null)
+          const ratio = gp && gp > 0.5 ? gp : 0.9
+          statics.set(code, { source: 'feeder', holdings: [{ secid: feeder.secid, weight: ratio * 100 }], stockRatio: ratio, quarter: '', feederName: feeder.etfName })
+          secids.add(feeder.secid)
+          return
+        }
+      }
+      // c) 普通基金:F10 全量持仓穿透
+      const stat = await getStatic(kv, code)
       statics.set(code, stat)
       for (const h of stat.holdings || []) secids.add(h.secid)
     })

@@ -69,15 +69,20 @@ function fmtPct(v: number) {
   const n = Number.isFinite(v) ? v : 0
   return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
 }
-// 估值来源徽标:f10 全量持仓为正常;top10 表示已降级到季报前十大(精度差)
+// 估值来源徽标:f10 全量持仓为正常;top10 表示已降级到季报前十大(精度差);
+// etf = 场内基金用自身价格;feeder = 联接基金映射目标 ETF 价格估算
 function srcLabel(q?: FundQuote) {
   if (!q || q.err) return '—'
   if (q.src === 'f10') return `${q.holds ?? ''}只·${q.quarter || '全量'}`
+  if (q.src === 'etf') return 'ETF'
+  if (q.src === 'feeder') return '联接'
   return '前十大'
 }
 function srcTitle(q?: FundQuote) {
   if (!q) return ''
   if (q.src === 'f10') return `基于${q.quarter || '最新'}全量公示持仓穿透估算,参与估算 ${q.holds ?? 0} 只股票,覆盖 ${q.coverage}% 净值`
+  if (q.src === 'etf') return '场内基金:直接采用该基金场内交易价格的实时涨跌,即最准确的实时估值'
+  if (q.src === 'feeder') return `联接基金:穿透其目标 ETF 的场内实时价格涨跌估算(仓位按 ${q.coverage}% 计),覆盖度以悬停涨跌值为准`
   return '已降级:全量持仓获取失败,仅用季报前十大重仓股估算,精度较低'
 }
 
