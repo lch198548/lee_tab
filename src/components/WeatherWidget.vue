@@ -27,10 +27,8 @@
 </template>
 
 <script lang="ts">
-// 模块级缓存:切换分组重挂载时直接复用旧数据(5 分钟内),后台静默刷新,不闪骨架屏
-import { createSWR } from '@/composables/useSWR'
-import { api } from '@/api'
-const wxSWR = createSWR((city: string) => api.getWeather(city))
+// 模块级共享缓存:切换分组重挂载/整页刷新都直接复用旧数据,后台静默刷新,不闪骨架屏
+import { wxSWR } from '@/composables/appCache'
 export default {}
 </script>
 

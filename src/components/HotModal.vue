@@ -58,9 +58,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CloseIcon } from './icons'
-import { api, HOT_SOURCES, type HotItem } from '@/api'
+import { HOT_SOURCES, type HotItem } from '@/api'
 import { useUI } from '@/composables/useUI'
 import { useDialog } from '@/composables/useDialog'
+import { hotSWR } from '@/composables/appCache'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -75,9 +76,6 @@ const updated = ref('')
 
 // 骨架屏行宽(%,伪随机但固定,避免每次渲染跳动)
 const SK_W = [82, 64, 91, 73, 56, 88, 69, 47]
-
-// 客户端按源缓存:切换回看过的源立即显示(后台仍静默刷新)
-const cache = new Map<string, { items: HotItem[]; updated: string }>()
 
 // 热度格式化:12345 -> "1.2万";过小不显示
 function fmtHot(v: number | null): string {
@@ -97,11 +95,11 @@ const updatedText = computed(() => {
 
 async function refresh() {
   errMsg.value = ''
-  // 命中缓存立即渲染,无缓存才显示骨架屏(避免切源时旧列表挂着像没反应)
-  const cached = cache.get(active.value)
+  // SWR:命中缓存立即渲染(磁贴已预热,打开零骨架),无缓存才显示骨架屏
+  const cached = hotSWR.peek(active.value)
   if (cached) {
-    items.value = cached.items
-    updated.value = cached.updated
+    items.value = cached.items || []
+    updated.value = cached.updated || ''
     loading.value = false
   } else {
     items.value = []
@@ -109,10 +107,9 @@ async function refresh() {
     loading.value = true
   }
   try {
-    const res = await api.getHot(active.value)
+    const res = await hotSWR.load(active.value)
     items.value = res.items || []
     updated.value = res.updated || ''
-    cache.set(active.value, { items: items.value, updated: updated.value })
   } catch (e) {
     // 失败:有缓存保留缓存,无缓存才提示错误
     if (!cached) {

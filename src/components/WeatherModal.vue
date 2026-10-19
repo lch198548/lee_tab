@@ -119,9 +119,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { api, WEATHER_EMOJI, type WeatherInfo, type WeatherDay } from '@/api'
+import { WEATHER_EMOJI, type WeatherInfo, type WeatherDay } from '@/api'
 import { useUI } from '@/composables/useUI'
 import { useDialog } from '@/composables/useDialog'
+import { wxSWR } from '@/composables/appCache'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
@@ -201,13 +202,23 @@ function hourLabel(time: string, i: number): string {
 }
 
 async function refresh() {
-  loading.value = true
-  errMsg.value = ''
+  // SWR:命中 30 分钟内缓存立即显示(磁贴已预热,打开零骨架),后台静默拉新
+  const cached = wxSWR.peek(city.value)
+  if (cached) {
+    info.value = cached
+    loading.value = false
+  } else {
+    loading.value = true
+    errMsg.value = ''
+  }
   try {
-    info.value = await api.getWeather(city.value)
+    info.value = await wxSWR.load(city.value)
+    errMsg.value = ''
   } catch (e) {
-    info.value = null
-    errMsg.value = e instanceof Error ? e.message : '获取失败'
+    if (!cached) {
+      info.value = null
+      errMsg.value = e instanceof Error ? e.message : '获取失败'
+    }
   } finally {
     loading.value = false
   }
@@ -219,7 +230,7 @@ async function changeCity() {
   switching.value = true
   errMsg.value = ''
   try {
-    const res = await api.getWeather(c)
+    const res = await wxSWR.load(c)
     info.value = res
     setWeatherCity(res.city || c)
     cityInput.value = ''
