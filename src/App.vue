@@ -51,6 +51,7 @@ import NavPage from '@/components/NavPage.vue'
 import AppDialogHost from '@/components/AppDialogHost.vue'
 import { useAppStore } from '@/stores/app'
 import { useConfig } from '@/composables/useConfig'
+import { useUI } from '@/composables/useUI'
 import { api } from '@/api'
 import { clearAllCache } from '@/utils/cache'
 
@@ -84,6 +85,8 @@ onMounted(async () => {
     if (init.loggedIn && init.config) {
       state.config = init.config
       state.groups = init.groups
+      // UI 状态随 init 带回,渲染前同步水合(常用页直接按已存布局渲染,无默认→已存二次跳变)
+      useUI().hydrate(init.ui)
     }
   } catch (e) {
     state.loggedIn = false

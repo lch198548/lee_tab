@@ -26,9 +26,17 @@
   </div>
 </template>
 
+<script lang="ts">
+// 模块级缓存:切换分组重挂载时直接复用旧数据(5 分钟内),后台静默刷新,不闪骨架屏
+import { createSWR } from '@/composables/useSWR'
+import { api } from '@/api'
+const wxSWR = createSWR((city: string) => api.getWeather(city))
+export default {}
+</script>
+
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { api, WEATHER_EMOJI, type WeatherInfo } from '@/api'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { WEATHER_EMOJI, type WeatherInfo } from '@/api'
 import { useUI } from '@/composables/useUI'
 
 defineEmits<{ (e: 'open'): void }>()
@@ -37,6 +45,8 @@ const { ui, loadUI } = useUI()
 const city = computed(() => ui.weatherCity || '北京')
 
 const info = ref<WeatherInfo | null>(null)
+// info 所属城市:换城市时防止旧城市数据串台
+const infoCity = ref('')
 const loading = ref(false)
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
@@ -48,9 +58,19 @@ const todayRange = computed(() => {
 })
 
 async function refresh() {
+  // SWR:同城市 5 分钟内缓存先直接显示(重挂载秒出),后台拉新替换
+  const cached = wxSWR.peek(city.value)
+  if (infoCity.value !== city.value) {
+    // 城市变了:有该城市缓存就先显示,否则清空走骨架,绝不能留旧城市数据
+    info.value = cached
+    infoCity.value = cached ? city.value : ''
+  } else if (cached && !info.value) {
+    info.value = cached
+  }
   loading.value = !info.value
   try {
-    info.value = await api.getWeather(city.value)
+    info.value = await wxSWR.load(city.value)
+    infoCity.value = city.value
   } catch {
     // 失败保留旧数据;无数据时显示错误态
   } finally {
@@ -67,6 +87,8 @@ onMounted(() => {
     if (!document.hidden) refresh()
   }, 1_800_000)
 })
+// 换城市立即刷新(WeatherModal 里改完回来磁贴马上跟上)
+watch(city, () => refresh())
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
 })

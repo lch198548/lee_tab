@@ -52,11 +52,19 @@
   </WidgetCard>
 </template>
 
+<script lang="ts">
+// 模块级缓存:切换分组重挂载时直接复用旧数据(5 分钟内),后台静默刷新,不闪骨架屏
+import { createSWR } from '@/composables/useSWR'
+import { api } from '@/api'
+const hotSWR = createSWR((src: string) => api.getHot(src))
+export default {}
+</script>
+
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import WidgetCard from './WidgetCard.vue'
 import { FlameIcon } from './icons'
-import { api, type HotItem, type HotSourceMeta } from '@/api'
+import type { HotItem, HotSourceMeta } from '@/api'
 import { useUI } from '@/composables/useUI'
 
 defineEmits<{ (e: 'open'): void }>()
@@ -84,9 +92,12 @@ const timeText = computed(() => {
 })
 
 async function refresh() {
+  // SWR:有 5 分钟内缓存先直接显示(重挂载秒出),后台拉新替换
+  const cached = hotSWR.peek(sourceId.value)
+  if (cached && !items.value.length) items.value = cached.items || []
   loading.value = items.value.length === 0
   try {
-    const res = await api.getHot(sourceId.value)
+    const res = await hotSWR.load(sourceId.value)
     items.value = res.items || []
   } catch {
     // 失败保留旧数据
@@ -102,7 +113,7 @@ async function refreshHeadlines() {
   await Promise.all(
     others.map(async (s) => {
       try {
-        const res = await api.getHot(s.id)
+        const res = await hotSWR.load(s.id)
         const first = (res.items || [])[0]
         if (first) result.push({ label: s.name, title: first.title })
       } catch { /* 单源失败静默 */ }

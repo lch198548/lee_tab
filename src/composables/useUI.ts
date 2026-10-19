@@ -49,6 +49,18 @@ function migrateValue(v: number, vw: number, fromRight: boolean): number {
 }
 
 export function useUI() {
+  // 同步水合(init 请求已带回 ui_state 时直接填充,跳过异步 loadUI,避免常用页先渲染默认布局再跳变)
+  function hydrate(s: unknown) {
+    if (loaded) return
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
+    const obj = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>
+    if (typeof obj.todoPanelX === 'number' && (obj.todoPanelX as number) < 0) {
+      obj.todoPanelX = migrateValue(obj.todoPanelX as number, vw, true)
+    }
+    Object.assign(state, defaults, obj)
+    loaded = true
+  }
+
   async function loadUI() {
     if (loaded) return
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
@@ -110,6 +122,7 @@ export function useUI() {
 
   return {
     ui: state,
+    hydrate,
     loadUI,
     saveUI,
     setPanelPos,

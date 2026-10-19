@@ -582,6 +582,7 @@ async function handleRequest(req, res) {
         return jsonResponse(res, { loggedIn: false, reason: auth.reason, passwordSet, config: null, groups: [] })
       }
       const config = await kv.get('config', { type: 'json' })
+      const ui = await kv.get('ui_state', { type: 'json' })
       const groupsIndex = ((await kv.get('groups_index', { type: 'json' })) || []).sort(
         (a, b) => (a.sort ?? 0) - (b.sort ?? 0)
       )
@@ -600,7 +601,8 @@ async function handleRequest(req, res) {
         reason: null,
         passwordSet,
         config: { ...DEFAULT_CONFIG, ...(config || {}) },
-        groups
+        groups,
+        ui: ui || null
       })
     }
 

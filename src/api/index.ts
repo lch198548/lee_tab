@@ -214,6 +214,7 @@ export interface InitResponse {
   passwordSet: boolean
   config: AppConfig | null
   groups: Group[]
+  ui?: unknown // UI 状态(favLayout 等),随 init 一次带回,渲染前同步水合避免布局二次跳变
 }
 
 async function request<T = unknown>(

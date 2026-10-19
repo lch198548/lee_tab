@@ -26,10 +26,11 @@ export async function onRequestGet({ request, env }) {
     return jsonResponse({ loggedIn: false, reason: auth.reason, passwordSet, config: null, groups: [] })
   }
 
-  // 已登录:并行读取配置 + 分组数据
-  const [config, groups] = await Promise.all([
+  // 已登录:并行读取配置 + 分组数据 + UI 状态(常用页布局等,渲染前同步水合避免二次跳变)
+  const [config, groups, ui] = await Promise.all([
     kvGetJSON(kv, 'config', null),
-    getGroupsData(kv)
+    getGroupsData(kv),
+    kvGetJSON(kv, 'ui_state', null)
   ])
 
   return jsonResponse({
@@ -37,6 +38,7 @@ export async function onRequestGet({ request, env }) {
     reason: null,
     passwordSet,
     config: config || null,
-    groups
+    groups,
+    ui: ui || null
   })
 }
