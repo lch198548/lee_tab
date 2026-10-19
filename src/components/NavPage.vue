@@ -303,7 +303,10 @@ watch(gridRef, (el, old) => {
     gridRO.observe(el)
   }
 })
-onUnmounted(() => gridRO?.disconnect())
+onUnmounted(() => {
+  gridRO?.disconnect()
+  if (autoBackupTimer) clearInterval(autoBackupTimer)
+})
 
 function specOf(it: { type: string; id?: string }) {
   return it.type === 'widget' ? WIDGET_SPECS[it.id || ''] || { w: 3, h: 2 } : { w: 1, h: 1 }
@@ -643,6 +646,10 @@ onMounted(async () => {
   loadTodos().catch(() => {})
   loadUI().catch(() => {})
   autoCloudBackup().catch(() => {})
+  // 页面长开时每小时复查一次自动备份(挂载时只查一次会漏掉跨天场景)
+  autoBackupTimer = setInterval(() => {
+    if (!document.hidden) autoCloudBackup().catch(() => {})
+  }, 3600_000)
   window.addEventListener('keydown', onKeydown)
   // 加载完成后自动聚焦搜索框
   nextTick(() => {
@@ -650,6 +657,8 @@ onMounted(async () => {
     if (input) input.focus()
   })
 })
+
+let autoBackupTimer: ReturnType<typeof setInterval> | null = null
 
 // 每日自动云备份:开启且距上次备份超过 24h 时静默执行,失败不打扰用户
 async function autoCloudBackup() {

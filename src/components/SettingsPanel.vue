@@ -218,8 +218,8 @@
               type="button"
               class="switch"
               :class="{ on: cloud.auto }"
-              :title="cloud.auto ? '点击关闭' : '点击开启(距上次备份超过 24 小时才执行)'"
-              @click="cloud.auto = !cloud.auto"
+              :title="cloud.auto ? '点击关闭(立即生效)' : '点击开启(立即生效,距上次备份超过 24 小时才执行)'"
+              @click="toggleAuto"
             >
               <span class="switch-knob"></span>
             </button>
@@ -238,7 +238,7 @@
           <div v-if="cloudBackups.length" class="cloud-list">
             <div class="cloud-list-head">
               <span>云端备份(最多保留 {{ cloud.keep || 30 }} 份)</span>
-              <button class="btn-mini" :disabled="cloudBusy" @click="refreshCloudList">刷新</button>
+              <button class="btn-mini" :disabled="cloudBusy" @click="refreshCloudList()">刷新</button>
             </div>
             <div v-for="b in cloudBackups" :key="b.key" class="cloud-row">
               <span class="cloud-name">{{ fmtBackupName(b.key) }}</span>
@@ -363,8 +363,34 @@ async function loadCloud() {
   try {
     const cfg = await api.getCloudConfig()
     Object.assign(cloud, cfg, { sk: '' })
+    // 配置就绪后静默拉取云端备份列表(失败不打扰,可手动点刷新)
+    refreshCloudList(true)
   } catch {
     /* 未配置时静默,表单留默认值 */
+  }
+}
+
+// 自动备份开关:即点即存,无需再点保存配置
+async function toggleAuto() {
+  if (cloudBusy.value) return
+  cloud.auto = !cloud.auto
+  const next = cloud.auto
+  try {
+    await api.saveCloudConfig({
+      endpoint: cloud.endpoint,
+      region: cloud.region,
+      bucket: cloud.bucket,
+      ak: cloud.ak,
+      sk: cloud.sk,
+      ua: cloud.ua,
+      prefix: cloud.prefix,
+      auto: next
+    })
+    cloudMsg(next ? '每日自动备份已开启' : '每日自动备份已关闭')
+  } catch (e) {
+    // 保存失败回滚开关
+    cloud.auto = !next
+    cloudMsg(e instanceof Error ? e.message : '开关保存失败', true)
   }
 }
 
@@ -423,20 +449,20 @@ async function runCloudBackup() {
   }
 }
 
-async function refreshCloudList() {
-  cloudBusy.value = true
+async function refreshCloudList(silent = false) {
+  if (!silent) cloudBusy.value = true
   try {
     const r = await api.cloudAction('list')
     if (r.ok && r.backups) {
       cloudBackups.value = r.backups
-      cloudMsg('')
-    } else {
+      if (!silent) cloudMsg('')
+    } else if (!silent) {
       cloudMsg(r.error || '获取备份列表失败', true)
     }
   } catch (e) {
-    cloudMsg(e instanceof Error ? e.message : '获取备份列表失败', true)
+    if (!silent) cloudMsg(e instanceof Error ? e.message : '获取备份列表失败', true)
   } finally {
-    cloudBusy.value = false
+    if (!silent) cloudBusy.value = false
   }
 }
 
