@@ -28,8 +28,9 @@ const d = now.getDate()
 
 const { lunar, special } = getLunarInfo(y, m, d)
 
-// 今天是否法定假日/调休(holiday-cn 数据)
-const off = ref<boolean | null>(null)
+// 今天休/班:周末默认为休;国家放假调休(holiday-cn)优先覆盖(如周末补班显示"班")
+const isWeekend = now.getDay() === 0 || now.getDay() === 6
+const off = ref<boolean | null>(isWeekend ? true : null)
 
 onMounted(async () => {
   try {
@@ -37,7 +38,7 @@ onMounted(async () => {
     const hit = res.days.find((x) => x.date === `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
     if (hit) off.value = hit.off
   } catch {
-    /* 无数据则不显示徽标 */
+    /* 拉取失败保留周末默认 */
   }
 })
 

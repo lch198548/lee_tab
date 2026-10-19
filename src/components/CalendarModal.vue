@@ -33,13 +33,14 @@
                 :class="{
                   dim: !cell.inMonth,
                   today: cell.isToday,
+                  weekend: cell.weekend,
                   rest: cell.off === true,
                   work: cell.off === false,
                   sel: selKey === `${cell.y}-${cell.m}-${cell.d}`
                 }"
                 @click="selectDay(cell)"
               >
-                <span class="cm-badge" v-if="cell.off !== null" :class="cell.off ? 'off' : 'on'">{{ cell.off ? '休' : '班' }}</span>
+                <span class="cm-badge" v-if="cell.inMonth" :class="cell.off ? 'off' : 'on'">{{ cell.off ? '休' : '班' }}</span>
                 <span class="cm-solar">{{ cell.d }}</span>
                 <span
                   v-if="cell.special"
@@ -57,7 +58,7 @@
             <template v-if="sel">
               <div class="cd-title">
                 {{ sel.y }}-{{ pad(sel.m) }}-{{ pad(sel.d) }} 星期{{ '日一二三四五六'[sel.week] }}
-                <span v-if="selOff !== null" class="cd-off" :class="selOff ? 'off' : 'on'">{{ selOff ? '休' : '班' }}</span>
+                <span class="cd-off" :class="selOff ? 'off' : 'on'">{{ selOff ? '休' : '班' }}</span>
               </div>
               <div class="cd-tile" :class="{ today: sel.isToday }">{{ sel.d }}</div>
               <div v-if="holidayName" class="cd-holiday">{{ holidayName }}</div>
@@ -150,6 +151,7 @@ interface Cell {
   d: number
   inMonth: boolean
   isToday: boolean
+  weekend: boolean
   lunarText: string
   special: SpecialDay | null
   off: boolean | null // true=休 false=班 null=非假期安排
@@ -177,9 +179,11 @@ const cells = computed<Cell[]>(() => {
       d: cd,
       inMonth,
       isToday: cy === now.getFullYear() && cm === now.getMonth() + 1 && cd === now.getDate(),
+      weekend: dt.getDay() === 0 || dt.getDay() === 6,
       lunarText: lunarShort(lunar, special),
       special,
-      off: hol ? hol.off : null
+      // 国家调休优先;无安排时周末默认为休(周六/周日)
+      off: hol ? hol.off : dt.getDay() === 0 || dt.getDay() === 6
     })
   }
   return out
@@ -208,8 +212,13 @@ const detailErr = ref(false)
 
 const holidayName = computed(() => holidayMap.value.get(`${sel.y}-${pad(sel.m)}-${pad(sel.d)}`)?.name || '')
 
-// 选中日期的休/班状态(null = 无假期安排)
-const selOff = computed<boolean | null>(() => holidayMap.value.get(selKey.value)?.off ?? null)
+// 选中日期的休/班状态:国家调休优先,无安排时周末默认为休
+const selOff = computed<boolean>(() => {
+  const hol = holidayMap.value.get(selKey.value)
+  if (hol) return hol.off
+  const dt = new Date(sel.y, sel.m - 1, sel.d)
+  return dt.getDay() === 0 || dt.getDay() === 6
+})
 
 async function refreshDetail() {
   const { y, m, d } = sel
@@ -536,6 +545,8 @@ onUnmounted(() => window.removeEventListener('keydown', onEscKey))
 }
 
 .cm-cell.weekend .cm-solar { color: #d64545; }
+/* 周末补班日:国家调休优先,日期回归正常色 */
+.cm-cell.work .cm-solar { color: var(--text-primary); }
 .cm-cell.today.weekend .cm-solar,
 .cm-cell.today:not(.weekend) .cm-solar { color: #fff; }
 
